@@ -1,7 +1,7 @@
 export type ShiftType = 'SABAH' | 'AKSAM' | 'FULL' | 'IZIN' | 'BOS';
 
 self.addEventListener("message", (event: MessageEvent<any>) => {
-    const { employees, assignments, presets, days, globalTargetHours, useGlobalTargetHours } = event.data;
+    const { employees, assignments, presets, days } = event.data;
     const safeAssignments = assignments || [];
 
     if (!employees || employees.length === 0) { 
@@ -12,10 +12,11 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
     let currentAssignments = [...safeAssignments];
     const DAYS = days as string[];
 
-    // 1. İZOLASYON: HERKESE 1 İZİN, 1 FULL. GERİSİ RASTGELE SABAH VEYA AKŞAM.
+    // 1. İZOLASYON: KUSURSUZ DNA DAĞITIMI
     employees.forEach((emp: any) => {
         let empAssignments = currentAssignments.filter((a: any) => a.employeeId === emp.id);
         
+        // Eksik günleri tamamla
         DAYS.forEach(day => {
             const id = `${emp.id}-${day}`;
             if (!empAssignments.find((a: any) => a.id === id)) {
@@ -28,28 +29,31 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
         const locked = empAssignments.filter((a: any) => a.isLocked);
         const unlocked = empAssignments.filter((a: any) => !a.isLocked);
         
-        let targets = { IZIN: 1, FULL: 1 };
+        // KUSURSUZ HAFTALIK DNA KOTASI (1 İzin, 1 Full, 2 Sabah, 3 Akşam = 7 Gün)
+        let targets: Record<string, number> = { IZIN: 1, FULL: 1, SABAH: 2, AKSAM: 3 };
+        
         locked.forEach((a: any) => {
-            if (a.type === 'IZIN') targets.IZIN--;
-            if (a.type === 'FULL') targets.FULL--;
+            if (targets[a.type] !== undefined) targets[a.type]--;
         });
 
         let pool: string[] = [];
         for(let i=0; i < Math.max(0, targets.IZIN); i++) pool.push('IZIN');
         for(let i=0; i < Math.max(0, targets.FULL); i++) pool.push('FULL');
+        for(let i=0; i < Math.max(0, targets.SABAH); i++) pool.push('SABAH');
+        for(let i=0; i < Math.max(0, targets.AKSAM); i++) pool.push('AKSAM');
         
-        // KUSURSUZ MİMARİ: Geri kalan günleri rastgele Sabah/Akşam doldur. Asla 'BOS' ekleme!
-        while(pool.length < unlocked.length) {
-            pool.push(Math.random() > 0.5 ? 'SABAH' : 'AKSAM');
-        }
-        
+        // Kilitlerden dolayı boşluk kalırsa Akşam ile doldur (Asla BOS bırakma)
+        while(pool.length < unlocked.length) pool.push('AKSAM');
         pool = pool.slice(0, unlocked.length);
+        
+        // Havuzu rastgele karıştır
         pool.sort(() => Math.random() - 0.5);
 
+        // Kilitsiz günlere DNA'yı zerk et
         unlocked.forEach((a: any, index: number) => {
-            const type = pool[index] || 'AKSAM'; 
+            const type = pool[index]; 
             a.type = type;
-            if (type === 'IZIN') { 
+            if (type === 'IZIN' || type === 'BOS') { 
                 a.startTime = ''; a.endTime = ''; 
             } else {
                 a.startTime = presets?.[type]?.startTime || (type === 'SABAH' ? '08:45' : type === 'FULL' ? '08:45' : '13:15');
@@ -64,66 +68,64 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
         return h * 60 + m;
     };
 
-    const getDiff = (s: string, e: string) => {
-        if (!s || !e) return 0;
-        const [sH, sM] = s.split(':').map(Number);
-        const [eH, eM] = e.split(':').map(Number);
-        let diff = (eH + eM/60) - (sH + sM/60);
-        return diff < 0 ? diff + 24 : diff;
-    };
-
-    // 2. CEZA FONKSİYONU (Açılış/Kapanış ve Bireysel Saat Hassasiyeti)
+    // 2. MUTLAK CEZA FONKSİYONU
     const calculateCost = (state: any[]) => {
         let cost = 0;
         
+        // GÜNLÜK MAĞAZA KURALLARI
         DAYS.forEach((day, dayIndex) => {
             const dayAssigns = state.filter(a => a.day === day && a.type !== 'IZIN' && a.type !== 'BOS');
             const izinAssigns = state.filter(a => a.day === day && a.type === 'IZIN');
             
-            if (dayAssigns.length === 0) cost += 10000000;
+            if (dayAssigns.length === 0) cost += 10000000; // Kapalı mağaza felakettir
             else {
-                // AÇILIŞ: Tam 2 Kişi
+                // AÇILIŞ: Tam 2 kişi
                 const openers = dayAssigns.filter(a => getMinutes(a.startTime) <= 9 * 60).length;
                 if (openers !== 2) cost += Math.abs(2 - openers) * 100000; 
                 
-                // KAPANIŞ: En az 3 Kişi
+                // KAPANIŞ: En az 3 kişi
                 const closers = dayAssigns.filter(a => getMinutes(a.endTime) >= 20 * 60 + 30).length;
                 if (closers < 3) cost += (3 - closers) * 100000;
-                else cost -= (closers - 3) * 5000; 
+                else cost -= (closers - 3) * 5000; // Akşama yığılmayı teşvik et
             }
             
             // Aynı gün 1'den fazla izin yasak
             if (izinAssigns.length > 1) cost += (izinAssigns.length - 1) * 200000; 
             
-            // 11 Saat Dinlenme (Kapanış yapan açılış yapamaz)
+            // 11 Saat Dinlenme (Kapanıştan çıkıp açılışa gelmek yasak)
             if (dayIndex < DAYS.length - 1) {
                 const nextDay = DAYS[dayIndex + 1];
                 dayAssigns.forEach(a => {
                     if (getMinutes(a.endTime) >= 21 * 60) { 
                         const nextAssign = state.find(n => n.employeeId === a.employeeId && n.day === nextDay);
                         if (nextAssign && nextAssign.type !== 'IZIN' && nextAssign.type !== 'BOS') {
-                            if (getMinutes(nextAssign.startTime) <= 9 * 60) cost += 150000; 
+                            if (getMinutes(nextAssign.startTime) <= 9 * 60) cost += 200000; 
                         }
                     }
                 });
             }
         });
 
-        // BİREYSEL SAAT CEZASI
+        // BİREYSEL KOTA KURALLARI (DNA KORUMASI)
         employees.forEach((emp: any) => {
-            const empAssigns = state.filter(a => a.employeeId === emp.id && a.type !== 'IZIN' && a.type !== 'BOS');
-            let totalHours = 0;
-            empAssigns.forEach(a => totalHours += getDiff(a.startTime, a.endTime));
+            const empAssigns = state.filter(a => a.employeeId === emp.id);
             
-            const targetHours = useGlobalTargetHours ? globalTargetHours : emp.targetHours;
-            // Saatleri dengelemek için güçlü ceza (Açılış/kapanışı bozmadan saatleri hedefe yaklaştırır)
-            cost += Math.abs(totalHours - targetHours) * 2000; 
+            const izinCount = empAssigns.filter(a => a.type === 'IZIN').length;
+            const fullCount = empAssigns.filter(a => a.type === 'FULL').length;
+            const sabahCount = empAssigns.filter(a => a.type === 'SABAH').length;
+
+            // ASLA İZİN VE FULL GÜNÜNÜ SİLME VEYA ÇOĞALTMA!
+            if (izinCount !== 1) cost += Math.abs(1 - izinCount) * 500000;
+            if (fullCount !== 1) cost += Math.abs(1 - fullCount) * 500000;
+            
+            // SABAH YIĞILMASINI ENGELLE (Maksimum 2 sabah)
+            if (sabahCount > 2) cost += (sabahCount - 2) * 50000;
         });
 
         return cost;
     };
 
-    // 3. KISITLI MUTASYON ALGORİTMASI
+    // 3. TAVLAMA ALGORİTMASI
     let bestState = JSON.parse(JSON.stringify(currentAssignments));
     let bestCost = calculateCost(bestState);
     let temperature = 50000; 
@@ -136,8 +138,8 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
         const empAssigns = neighbor.filter((a:any) => a.employeeId === randomEmp && !a.isLocked);
 
         if (empAssigns.length > 0) {
-            if (Math.random() > 0.5 && empAssigns.length >= 2) {
-                // TAKAS (SWAP): Günleri kendi içinde yer değiştir.
+            // Çoğunlukla sadece yer değiştir (Swap)
+            if (Math.random() > 0.3 && empAssigns.length >= 2) {
                 const idx1 = Math.floor(Math.random() * empAssigns.length);
                 let idx2 = Math.floor(Math.random() * empAssigns.length);
                 while(idx1 === idx2) idx2 = Math.floor(Math.random() * empAssigns.length);
@@ -154,8 +156,7 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
                 empAssigns[idx2].startTime = tStart;
                 empAssigns[idx2].endTime = tEnd;
             } else {
-                // KISITLI MUTASYON: Sadece Sabah'ı Akşam'a, Akşam'ı Sabah'a çevir!
-                // Asla 'BOS', 'FULL' veya 'IZIN' yapma.
+                // Kısıtlı Mutasyon: Mağazanın dengesi için gerekirse Sabah'ı Akşam'a çevir
                 const idx = Math.floor(Math.random() * empAssigns.length);
                 const currentType = empAssigns[idx].type;
                 

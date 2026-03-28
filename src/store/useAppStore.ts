@@ -2,12 +2,11 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Employee, Assignment, ShiftPreset, AppState } from '@/types';
 
-// Varsayılan dinamik renkler (İstediğin zaman arayüzden değiştirebileceksin)
 const defaultPresets: Record<string, ShiftPreset> = {
-    SABAH: { type: 'SABAH', startTime: '08:45', endTime: '17:45', label: 'Sabah', color: '#0ea5e9' }, // Sky
-    AKSAM: { type: 'AKSAM', startTime: '13:15', endTime: '21:15', label: 'Akşam', color: '#6366f1' }, // Indigo
-    FULL: { type: 'FULL', startTime: '08:45', endTime: '21:15', label: 'Full', color: '#f59e0b' },   // Amber
-    IZIN: { type: 'IZIN', startTime: '', endTime: '', label: 'İzin', color: '#71717a' }          // Zinc
+    SABAH: { type: 'SABAH', startTime: '08:45', endTime: '17:45', label: 'Sabah', color: '#0ea5e9' }, 
+    AKSAM: { type: 'AKSAM', startTime: '13:15', endTime: '21:15', label: 'Akşam', color: '#6366f1' }, 
+    FULL: { type: 'FULL', startTime: '08:45', endTime: '21:15', label: 'Full', color: '#f59e0b' },   
+    IZIN: { type: 'IZIN', startTime: '', endTime: '', label: 'İzin', color: '#71717a' }          
 };
 
 interface StoreState {
@@ -16,7 +15,6 @@ interface StoreState {
     presets: Record<string, ShiftPreset>;
     currentState: AppState;
     
-    // TS HATALARINI ÇÖZEN KAYIP DEĞİŞKENLER
     globalTargetHours: number;
     useGlobalTargetHours: boolean;
     setGlobalTargetSettings: (useGlobal: boolean, hours: number) => void;
@@ -26,7 +24,6 @@ interface StoreState {
     clearEmployees: () => void;
     updateEmployeeTargetHours: (id: string, hours: number) => void;
     
-    // RENK MOTORU VE SIFIRLAMA EKLENDİ
     updatePreset: (type: string, startTime: string, endTime: string, color: string) => void;
     resetPresets: () => void; 
     
@@ -48,18 +45,24 @@ export const useAppStore = create<StoreState>()(
             clearEmployees: () => set({ employees: [], assignments: [], currentState: 'BOS' }),
             updateEmployeeTargetHours: (id, hours) => set((state) => ({ employees: state.employees.map(e => e.id === id ? { ...e, targetHours: hours } : e) })),
 
-            // Şablon güncelleyici artık rengi de alıyor
             updatePreset: (type, startTime, endTime, color) => set((state) => ({ 
                 presets: { ...state.presets, [type]: { ...state.presets[type], startTime, endTime, color } } 
             })),
-            resetPresets: () => set({ presets: defaultPresets }), // Şablonları Fabrika ayarlarına döndür
+            resetPresets: () => set({ presets: defaultPresets }), 
 
             updateAssignment: (id, type, startTime, endTime, isLocked) => set((state) => {
                 const existingIndex = state.assignments.findIndex(a => a.id === id);
                 let newAssignments = [...state.assignments];
-                if (existingIndex >= 0) newAssignments[existingIndex] = { ...newAssignments[existingIndex], type: type as any, startTime, endTime, isLocked };
-                else {
-                    const [employeeId, day] = id.split('-');
+                
+                if (existingIndex >= 0) {
+                    newAssignments[existingIndex] = { ...newAssignments[existingIndex], type: type as any, startTime, endTime, isLocked };
+                } else {
+                    // KUSURSUZ MİMARİ DEVRİM: split('-') hatası yok edildi!
+                    // UUID içindeki tirelere dokunmamak için sadece en sondaki tireyi (Günü ayıran) buluyoruz.
+                    const lastDash = id.lastIndexOf('-');
+                    const employeeId = id.substring(0, lastDash);
+                    const day = id.substring(lastDash + 1);
+                    
                     newAssignments.push({ id, employeeId, day, type: type as any, startTime, endTime, isLocked });
                 }
                 return { assignments: newAssignments, currentState: 'ELLE_DIZILIYOR' };
@@ -71,14 +74,10 @@ export const useAppStore = create<StoreState>()(
         { 
             name: 'chronoshift-v2-storage', 
             storage: createJSONStorage(() => localStorage), 
-            version: 6,
-            
-            // KUSURSUZ MİMARİ: GÖÇ (MIGRATION) MOTORU
+            version: 7, // Parçalanmış ID'leri temizlemek için versiyonu yükselttik
             migrate: (persistedState: any, version: number) => {
-                if (version < 6) {
-                    // Sistem eski bir veritabanı (v5 ve altı) yakalarsa, 
-                    // çökmek yerine eski veriyi yok eder ve yeni mimariyle sıfırdan başlar.
-                    console.warn(`[ChronoShift]: Eski veritabanı versiyonu (${version}) tespit edildi. Sistem v6'ya sıfırlanıyor...`);
+                if (version < 7) {
+                    console.warn(`[ChronoShift]: Parçalanmış UUID tespiti. Veritabanı v7'ye temizleniyor...`);
                     return undefined as any; 
                 }
                 return persistedState as StoreState;
