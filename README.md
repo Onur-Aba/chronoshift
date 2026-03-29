@@ -1,6 +1,4 @@
-Kusura bakma, tamamen haklısın! Gözden kaçırmışım ve kod bloğunu kapatırken Markdown bütünlüğünü bozmuşum. İnatlaşmak yok, tam istediğin gibi yapıyorum; kod bloğunu kapatmıyorum, yerine sadece "bash" yazıp bırakıyorum.
 
-İşte baştan sona tek parça Markdown dosyan:
 
 <div align="center">
   <h1>ChronoShift</h1>
