@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://chronoshift.vercel.app"), // Kendi Vercel domainin ne olacaksa onu yaz
+  metadataBase: new URL("https://chronoshift-beta.vercel.app/"), // Kendi Vercel domainin ne olacaksa onu yaz
   // 1. TEMEL SEO KİMLİĞİ (Google Arama Sonuçları)
   title: {
     default: "ChronoShift | Yapay Zeka Destekli Akıllı Vardiya Planlama",
