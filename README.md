@@ -67,7 +67,7 @@ npm install
 
 # Geliştirme sunucusunu başlatın
 npm run dev
-```bash
+```
 
 <div align="center">
 <h3>Projeyi Beğendiniz Mi?</h3>
