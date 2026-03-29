@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import { AlertCircle, Lock, Unlock } from "lucide-react";
 
 interface Props {
     isOpen: boolean;
@@ -12,27 +12,31 @@ export const LockPopup = ({ isOpen, onConfirm, onDecline }: Props) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full border border-gray-100 transform transition-all scale-100">
-                <div className="flex items-center gap-3 text-amber-500 mb-4">
-                    <AlertTriangle size={28} />
-                    <h3 className="text-lg font-bold text-gray-800">Dengeyi Bozuyorsunuz</h3>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm transition-all duration-500">
+            <div className="bg-card border border-border shadow-2xl rounded-3xl p-7 max-w-md w-full mx-4 animate-in fade-in zoom-in-95 duration-300">
+                <div className="flex items-center gap-3 mb-4 text-primary">
+                    <div className="p-2 bg-primary/10 rounded-full border border-primary/20">
+                        <AlertCircle size={22} />
+                    </div>
+                    <h3 className="text-xl font-extrabold text-foreground tracking-tight">Manuel Müdahale</h3>
                 </div>
-                <p className="text-gray-600 text-sm mb-6 leading-relaxed">
-                    Bu atamayı o gün için <strong>sabitleyip</strong> (kilitleyip), geri kalan programı bozulan adalet dengesine göre yeniden optimize edeyim mi?
+                
+                <p className="text-sm font-medium text-muted-foreground mb-8 leading-relaxed">
+                    Otomatik dizilmiş kusursuz bir takvime manuel bir vardiya atadınız. Bu yeni vardiyayı <strong className="text-foreground">sabitleyip (kilitleyip)</strong> geri kalan takvimi buna göre yeniden dizmek ister misiniz?
                 </p>
-                <div className="flex gap-3 justify-end">
+                
+                <div className="flex flex-col sm:flex-row justify-end gap-3">
                     <button 
-                        onClick={onDecline}
-                        className="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                        onClick={onDecline} 
+                        className="flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted border border-border/50 rounded-xl transition-all active:scale-95"
                     >
-                        Hayır, sadece bırak
+                        <Unlock size={16} /> Sadece Ekle
                     </button>
                     <button 
-                        onClick={onConfirm}
-                        className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
+                        onClick={onConfirm} 
+                        className="flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-extrabold text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30 rounded-xl transition-all active:scale-95"
                     >
-                        Evet, Kilitle ve Yeniden Diz
+                        <Lock size={16} /> Kilitle ve Yeniden Diz
                     </button>
                 </div>
             </div>

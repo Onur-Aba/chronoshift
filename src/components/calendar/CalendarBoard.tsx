@@ -15,35 +15,43 @@ const AssignmentCell = ({ employeeId, day }: { employeeId: string, day: string }
     let customStyle = {};
     let isBos = !assign || assign.type === 'BOS';
 
+    // Premium Blending: Seçilen rengin çok hafif bir yansıması
     if (!isBos && assign) {
         const presetColor = presets[assign.type]?.color || '#94a3b8';
         customStyle = {
             backgroundColor: `${presetColor}1A`, 
             borderColor: `${presetColor}4D`, 
-            color: presetColor
+            color: presetColor,
+            boxShadow: `inset 0 0 12px ${presetColor}0A` // Hafif iç parlama
         };
     }
 
     return (
-        // MİMARİ DOKUNUŞ: Hücrelere transition-all ve duration-500 eklendi. Renkler yumuşak geçecek.
         <div 
             ref={setNodeRef} 
             style={customStyle} 
-            className={`relative flex flex-col items-center justify-center p-2 min-h-[70px] border rounded-xl transition-all duration-500 ease-in-out ${isBos ? 'bg-card border-border border-dashed text-muted-foreground' : ''} ${isOver ? 'ring-2 ring-primary scale-[1.02]' : ''}`}
+            // UX DOKUNUŞU: Boş hücreler içe çökük (shadow-inner), dolu hücreler şık çerçeveli. Drag-over anında neon parlama.
+            className={`relative flex flex-col items-center justify-center p-2 min-h-[76px] border rounded-2xl transition-all duration-300 ease-out 
+                ${isBos ? 'bg-background/50 border-border/40 border-dashed text-muted-foreground shadow-inner hover:bg-background/80' : 'shadow-sm hover:shadow-md hover:scale-[1.02]'} 
+                ${isOver ? 'ring-2 ring-primary bg-primary/5 scale-105 shadow-xl z-10' : ''}`}
         >
-            {assign?.isLocked && <Pin size={12} className="absolute top-1.5 right-1.5 opacity-50" />}
+            {assign?.isLocked && <Pin size={12} className="absolute top-2 right-2 opacity-40 drop-shadow-md" />}
             
             {!isBos && assign ? (
                 assign.type === 'IZIN' ? ( 
-                    <span className="font-black text-xl opacity-50 tracking-widest transition-opacity duration-500">X</span> 
+                    <span className="font-black text-2xl opacity-40 tracking-widest transition-opacity duration-500 drop-shadow-sm">X</span> 
                 ) : (
-                    <div className="flex flex-col gap-1 items-center z-10 w-full px-1 transition-all duration-500">
-                        <input type="time" value={assign.startTime} onChange={(e) => updateAssignment(id, assign.type, e.target.value, assign.endTime, true)} className="bg-transparent outline-none text-center text-xs font-bold w-full cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded transition-colors duration-300" />
-                        <div className="w-8 border-b border-current opacity-20"></div>
-                        <input type="time" value={assign.endTime} onChange={(e) => updateAssignment(id, assign.type, assign.startTime, e.target.value, true)} className="bg-transparent outline-none text-center text-xs font-bold w-full cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded transition-colors duration-300" />
+                    <div className="flex flex-col gap-1.5 items-center z-10 w-full px-1 transition-all duration-500">
+                        {/* Premium Time Inputs (Kapsül Tasarım) */}
+                        <div className="bg-background/80 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
+                            <input type="time" value={assign.startTime} onChange={(e) => updateAssignment(id, assign.type, e.target.value, assign.endTime, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer hover:opacity-70 transition-opacity" />
+                        </div>
+                        <div className="bg-background/80 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
+                            <input type="time" value={assign.endTime} onChange={(e) => updateAssignment(id, assign.type, assign.startTime, e.target.value, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer hover:opacity-70 transition-opacity" />
+                        </div>
                     </div>
                 )
-            ) : <span className="text-[10px] opacity-30 transition-opacity duration-500">Boş</span>}
+            ) : <span className="text-[10px] font-medium tracking-widest uppercase opacity-30 transition-opacity duration-500">BOS</span>}
         </div>
     );
 };
@@ -60,27 +68,38 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
     };
 
     return (
-        // MİMARİ DOKUNUŞ: Ana kapsayıcı bg-background oldu (Header ile aynı). transition-colors ve duration-500 eklendi.
-        <div className="flex-1 p-6 overflow-hidden border-r border-border flex flex-col bg-[var(--background)] transition-colors duration-500 ease-in-out">
-            <div className="flex justify-between items-center mb-6 flex-shrink-0">
-                <div className="transition-colors duration-500">
-                    <h1 className="text-3xl font-extrabold text-foreground transition-colors duration-500">Vardiya Matrisi</h1>
-                    <span className="text-sm font-medium text-muted-foreground mt-1 block transition-colors duration-500">Durum: <span className="font-bold text-primary">{currentState}</span></span>
+        // MİMARİ DEVRİM: Yüzen Ada (Floating Island). Sidebar ile mükemmel simetri. my-4 ml-4 mr-2 ile çerçeveden koptu.
+        <div className="flex-1 my-4 ml-4 mr-2 p-6 flex flex-col bg-card/90 backdrop-blur-xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden relative transition-all duration-500 ease-in-out">
+            
+            {/* Üst Kontrol Paneli */}
+            <div className="flex justify-between items-center mb-6 flex-shrink-0 transition-colors duration-500">
+                <div>
+                    <h1 className="text-3xl font-extrabold text-foreground tracking-tight transition-colors duration-500 drop-shadow-sm">Vardiya Matrisi</h1>
+                    <div className="flex items-center gap-2 mt-1.5">
+                        <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest transition-colors duration-500">Durum: <span className="text-primary">{currentState}</span></span>
+                    </div>
                 </div>
                 <div className="flex gap-3">
-                    <button onClick={clearEmployees} className="px-4 py-2 rounded-xl font-bold text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-900/30 flex items-center gap-2 transition-all duration-300"><UserX size={16}/> Kişileri Sil</button>
-                    <button onClick={clearCalendar} className="px-4 py-2 rounded-xl font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 dark:hover:bg-amber-900/30 flex items-center gap-2 transition-all duration-300"><Trash2 size={16}/> Takvimi Sıfırla</button>
-                    <button onClick={onOptimize} disabled={isOptimizing} className="px-6 py-2 rounded-xl font-bold text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all duration-300">✨ {isOptimizing ? 'Diziliyor...' : 'Otomatik Diz'}</button>
+                    <button onClick={clearEmployees} className="px-4 py-2.5 rounded-xl font-bold text-sm text-red-600 bg-red-500/10 hover:bg-red-500/20 flex items-center gap-2 transition-all duration-300 active:scale-95 shadow-sm border border-red-500/10"><UserX size={15}/> Personelleri Sil</button>
+                    <button onClick={clearCalendar} className="px-4 py-2.5 rounded-xl font-bold text-sm text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-2 transition-all duration-300 active:scale-95 shadow-sm border border-amber-500/10"><Trash2 size={15}/> Takvimi Temizle</button>
+{/* Eski Hali: className="... text-primary-foreground bg-primary ..." */}
+                    <button onClick={onOptimize} disabled={isOptimizing} className="px-7 py-2.5 rounded-xl font-extrabold text-sm text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30 transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 disabled:hover:scale-100 flex items-center gap-2">
+                        ✨ {isOptimizing ? 'Hesaplanıyor...' : 'Otomatik Diz'}
+                    </button>
                 </div>
             </div>
 
-            {/* MİMARİ DOKUNUŞ: Tablonun içi bg-card oldu. Yumuşak geçiş garantilendi. */}
-            <div className="flex-1 bg-[var(--card)] border border-border rounded-2xl shadow-sm flex flex-col min-h-0 transition-colors duration-500 ease-in-out">
-                <div className="grid grid-cols-[200px_repeat(7,1fr)] border-b border-border bg-muted/30 flex-shrink-0 transition-colors duration-500">
-                    <div className="p-4 font-bold text-muted-foreground transition-colors duration-500">Personel & Saat</div>
-                    {DAYS.map(day => <div key={day} className="p-4 font-bold text-center text-foreground transition-colors duration-500">{day}</div>)}
+            {/* MİMARİ DOKUNUŞ: Tablo alanı içe çökük (shadow-inner), arkaplanı hafif transparan. Çalışma alanı hissi verir. */}
+            <div className="flex-1 bg-background/40 backdrop-blur-sm border border-border/50 rounded-2xl shadow-inner flex flex-col min-h-0 transition-colors duration-500 ease-in-out overflow-hidden">
+                
+                {/* Tablo Başlıkları */}
+                <div className="grid grid-cols-[220px_repeat(7,1fr)] border-b border-border/60 bg-card/40 flex-shrink-0 transition-colors duration-500">
+                    <div className="p-4 font-extrabold text-xs uppercase tracking-widest text-muted-foreground transition-colors duration-500 flex items-center">Personel & Kota</div>
+                    {DAYS.map(day => <div key={day} className="p-4 font-extrabold text-xs uppercase tracking-widest text-center text-foreground transition-colors duration-500">{day}</div>)}
                 </div>
                 
+                {/* Tablo Gövdesi (Scroll) */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar pb-10 transition-colors duration-500">
                     {employees.map(emp => {
                         let assignedHours = 0;
@@ -90,21 +109,23 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
                         
                         const isOvertime = assignedHours > emp.targetHours;
                         const isPerfect = assignedHours === emp.targetHours;
-                        const statusColor = isOvertime ? "bg-red-500/10 text-red-600" : isPerfect ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary";
+                        const statusColor = isOvertime ? "bg-red-500/15 text-red-600 border-red-500/20" : isPerfect ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/20" : "bg-primary/15 text-primary border-primary/20";
 
                         return (
-                            <div key={emp.id} className="grid grid-cols-[200px_repeat(7,1fr)] border-b border-border/50 hover:bg-muted/10 transition-colors duration-500">
-                                <div className="p-3 flex flex-col justify-center border-r border-border/50 relative group transition-colors duration-500">
-                                    <button onClick={() => removeEmployee(emp.id)} className="absolute top-2 right-2 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"><Trash2 size={14}/></button>
-                                    <span className="font-extrabold text-foreground text-sm mb-2 truncate pr-6 transition-colors duration-500">{emp.name}</span>
-                                    <div className="flex justify-between items-center text-xs transition-colors duration-500">
-                                        <div className="flex flex-col">
-                                            <span className="text-muted-foreground text-[10px] uppercase transition-colors duration-500">Hedef</span>
-                                            <input type="number" value={emp.targetHours} onChange={(e) => updateEmployeeTargetHours(emp.id, Number(e.target.value))} className="w-12 p-1 bg-muted border border-border rounded outline-none focus:border-primary text-foreground text-center transition-colors duration-300" />
+                            <div key={emp.id} className="grid grid-cols-[220px_repeat(7,1fr)] border-b border-border/40 hover:bg-card/60 transition-colors duration-300 group/row">
+                                <div className="p-4 flex flex-col justify-center border-r border-border/40 relative transition-colors duration-500">
+                                    <button onClick={() => removeEmployee(emp.id)} className="absolute top-2 right-2 text-muted-foreground/40 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-all duration-300 hover:scale-110"><Trash2 size={14}/></button>
+                                    
+                                    <span className="font-extrabold text-foreground text-sm mb-3 truncate pr-6 transition-colors duration-500 drop-shadow-sm">{emp.name}</span>
+                                    
+                                    <div className="flex justify-between items-center text-xs transition-colors duration-500 bg-background/50 p-2 rounded-xl border border-border/40 shadow-inner">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-muted-foreground text-[9px] font-black uppercase tracking-wider opacity-70 transition-colors duration-500">Hedef</span>
+                                            <input type="number" value={emp.targetHours} onChange={(e) => updateEmployeeTargetHours(emp.id, Number(e.target.value))} className="w-11 p-1 bg-card border border-border/50 shadow-sm rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 text-foreground text-center font-mono font-bold transition-all duration-300" />
                                         </div>
-                                        <div className="flex flex-col items-end">
-                                            <span className="text-muted-foreground text-[10px] uppercase transition-colors duration-500">Mevcut</span>
-                                            <span className={`px-2 py-1 rounded font-bold transition-colors duration-500 ${statusColor}`}>{assignedHours.toFixed(1)}s</span>
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            <span className="text-muted-foreground text-[9px] font-black uppercase tracking-wider opacity-70 transition-colors duration-500">Mevcut</span>
+                                            <span className={`px-2 py-1 rounded-md font-bold font-mono border transition-all duration-500 shadow-sm ${statusColor}`}>{assignedHours.toFixed(1)}s</span>
                                         </div>
                                     </div>
                                 </div>
@@ -112,7 +133,13 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
                             </div>
                         );
                     })}
-                    {employees.length === 0 && <div className="p-10 text-center text-muted-foreground font-medium transition-colors duration-500">Lütfen sağ panelden personel ekleyin.</div>}
+                    
+                    {employees.length === 0 && (
+                        <div className="h-full flex flex-col items-center justify-center text-muted-foreground/50 font-medium transition-colors duration-500 gap-3">
+                            <UserX size={48} className="opacity-20" />
+                            <span>Havuz boş. İşlem yapmak için sağ panelden personel ekleyin.</span>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -3,8 +3,7 @@
 /* 1. MİMARİ KİLİT: Tailwind v4'e dark modu nerede arayacağını söylüyoruz */
 @custom-variant dark (&:is(.dark *));
 
-/* 2. TAILWIND V4 TEMA HARİTASI (Hatanın Çözüldüğü Yer) 
-   Eğer bunu yazmazsak bg-background veya bg-card çalışmaz! */
+/* 2. TAILWIND V4 TEMA HARİTASI */
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,9 +11,21 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
-  --color-primary: #0e0880; /* İSTEDİĞİN ÖZEL BUTON RENGİ */
+  --color-primary: #0e0880; 
+
+  /* Animasyon tanımını doğrudan buraya alıyoruz */
+  --animate-aurora: aurora 60s linear infinite;
 }
 
+/* SAF CSS KEYFRAMES: Tailwind v4'ün bunu gözden kaçırması imkansızdır */
+@keyframes aurora {
+  0% {
+    background-position: 50% 50%, 50% 50%;
+  }
+  100% {
+    background-position: 350% 50%, 350% 50%;
+  }
+}
 /* 3. RENK UZAYI VE MATEMATİĞİ */
 @layer base {
   :root {
