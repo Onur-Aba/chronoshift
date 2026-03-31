@@ -139,7 +139,7 @@ export default function Home() {
                     </motion.div>
                 </AuroraBackground>
 
-                <main id="workspace" className="h-[calc(100vh-80px)] w-full flex flex-row overflow-hidden relative z-10 border-t border-border/50 bg-background/50 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.05)] dark:shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.2)]">
+                <main id="workspace" className="min-h-[calc(100vh-80px)] lg:h-[calc(100vh-80px)] w-full flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative z-10 border-t border-border/50 bg-background/50 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.05)] dark:shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.2)]">
                     <CalendarBoard onOptimize={runOptimization} isOptimizing={isOptimizing} />
                     <Sidebar />
                 </main>

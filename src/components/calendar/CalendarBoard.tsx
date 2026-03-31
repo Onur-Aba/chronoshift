@@ -68,78 +68,85 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
     };
 
     return (
-        // MİMARİ DEVRİM: Yüzen Ada (Floating Island). Sidebar ile mükemmel simetri. my-4 ml-4 mr-2 ile çerçeveden koptu.
-        <div className="flex-1 my-4 ml-4 mr-2 p-6 flex flex-col bg-card/90 backdrop-blur-xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden relative transition-all duration-500 ease-in-out">
+        // MİMARİ DÜZELTME: Mobilde mx-4 (sağ sol boşluk), Masaüstünde ml-4 mr-2
+        <div className="flex-1 my-4 mx-4 lg:ml-4 lg:mr-2 p-4 lg:p-6 flex flex-col bg-card/90 backdrop-blur-xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden relative transition-all duration-500 ease-in-out">
             
             {/* Üst Kontrol Paneli */}
-            <div className="flex justify-between items-center mb-6 flex-shrink-0 transition-colors duration-500">
+            {/* MOBİL UX: Flex-col ile başlık ve butonlar telefonda alt alta, butonlar sarmallı (flex-wrap) */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 lg:gap-0 mb-4 lg:mb-6 flex-shrink-0 transition-colors duration-500">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-foreground tracking-tight transition-colors duration-500 drop-shadow-sm">Vardiya Matrisi</h1>
+                    <h1 className="text-2xl lg:text-3xl font-extrabold text-foreground tracking-tight transition-colors duration-500 drop-shadow-sm">Vardiya Matrisi</h1>
                     <div className="flex items-center gap-2 mt-1.5">
                         <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
                         <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest transition-colors duration-500">Durum: <span className="text-primary">{currentState}</span></span>
                     </div>
                 </div>
-                <div className="flex gap-3">
-                    <button onClick={clearEmployees} className="px-4 py-2.5 rounded-xl font-bold text-sm text-red-600 bg-red-500/10 hover:bg-red-500/20 flex items-center gap-2 transition-all duration-300 active:scale-95 shadow-sm border border-red-500/10"><UserX size={15}/> Personelleri Sil</button>
-                    <button onClick={clearCalendar} className="px-4 py-2.5 rounded-xl font-bold text-sm text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-2 transition-all duration-300 active:scale-95 shadow-sm border border-amber-500/10"><Trash2 size={15}/> Takvimi Temizle</button>
-{/* Eski Hali: className="... text-primary-foreground bg-primary ..." */}
-                    <button onClick={onOptimize} disabled={isOptimizing} className="px-7 py-2.5 rounded-xl font-extrabold text-sm text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30 transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 disabled:hover:scale-100 flex items-center gap-2">
+                <div className="flex flex-wrap gap-2 lg:gap-3 w-full lg:w-auto">
+                    <button onClick={clearEmployees} className="flex-1 lg:flex-none justify-center px-3 lg:px-4 py-2.5 rounded-xl font-bold text-xs lg:text-sm text-red-600 bg-red-500/10 hover:bg-red-500/20 flex items-center gap-2 transition-all duration-300 active:scale-95 shadow-sm border border-red-500/10"><UserX size={15}/> Sil</button>
+                    <button onClick={clearCalendar} className="flex-1 lg:flex-none justify-center px-3 lg:px-4 py-2.5 rounded-xl font-bold text-xs lg:text-sm text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-2 transition-all duration-300 active:scale-95 shadow-sm border border-amber-500/10"><Trash2 size={15}/> Temizle</button>
+                    <button onClick={onOptimize} disabled={isOptimizing} className="w-full lg:w-auto justify-center px-4 lg:px-7 py-2.5 rounded-xl font-extrabold text-sm text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30 transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 disabled:hover:scale-100 flex items-center gap-2">
                         ✨ {isOptimizing ? 'Hesaplanıyor...' : 'Otomatik Diz'}
                     </button>
                 </div>
             </div>
 
-            {/* MİMARİ DOKUNUŞ: Tablo alanı içe çökük (shadow-inner), arkaplanı hafif transparan. Çalışma alanı hissi verir. */}
-            <div className="flex-1 bg-background/40 backdrop-blur-sm border border-border/50 rounded-2xl shadow-inner flex flex-col min-h-0 transition-colors duration-500 ease-in-out overflow-hidden">
+            {/* Tablo Konteyneri */}
+            <div className="flex-1 bg-background/40 backdrop-blur-sm border border-border/50 rounded-2xl shadow-inner flex flex-col min-h-0 transition-colors duration-500 ease-in-out overflow-hidden relative">
                 
-                {/* Tablo Başlıkları */}
-                <div className="grid grid-cols-[220px_repeat(7,1fr)] border-b border-border/60 bg-card/40 flex-shrink-0 transition-colors duration-500">
-                    <div className="p-4 font-extrabold text-xs uppercase tracking-widest text-muted-foreground transition-colors duration-500 flex items-center">Personel & Kota</div>
-                    {DAYS.map(day => <div key={day} className="p-4 font-extrabold text-xs uppercase tracking-widest text-center text-foreground transition-colors duration-500">{day}</div>)}
-                </div>
-                
-                {/* Tablo Gövdesi (Scroll) */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar pb-10 transition-colors duration-500">
-                    {employees.map(emp => {
-                        let assignedHours = 0;
-                        assignments.filter(a => a.employeeId === emp.id && a.type !== 'IZIN' && a.type !== 'BOS').forEach(a => {
-                            assignedHours += getDiff(a.startTime, a.endTime);
-                        });
+                {/* MİMARİ DEVRİM: Yatay Kaydırma (Horizontal Scroll) Alanı */}
+                <div className="flex-1 overflow-x-auto overflow-y-hidden flex flex-col w-full custom-scrollbar">
+                    {/* MOBİL UX: Eğer ekran darsa tabloyu 900px'e zorla, böylece ezilmez, sağa kaydırılabilir olur */}
+                    <div className="min-w-[900px] lg:min-w-0 flex flex-col flex-1">
                         
-                        const isOvertime = assignedHours > emp.targetHours;
-                        const isPerfect = assignedHours === emp.targetHours;
-                        const statusColor = isOvertime ? "bg-red-500/15 text-red-600 border-red-500/20" : isPerfect ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/20" : "bg-primary/15 text-primary border-primary/20";
-
-                        return (
-                            <div key={emp.id} className="grid grid-cols-[220px_repeat(7,1fr)] border-b border-border/40 hover:bg-card/60 transition-colors duration-300 group/row">
-                                <div className="p-4 flex flex-col justify-center border-r border-border/40 relative transition-colors duration-500">
-                                    <button onClick={() => removeEmployee(emp.id)} className="absolute top-2 right-2 text-muted-foreground/40 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-all duration-300 hover:scale-110"><Trash2 size={14}/></button>
-                                    
-                                    <span className="font-extrabold text-foreground text-sm mb-3 truncate pr-6 transition-colors duration-500 drop-shadow-sm">{emp.name}</span>
-                                    
-                                    <div className="flex justify-between items-center text-xs transition-colors duration-500 bg-background/50 p-2 rounded-xl border border-border/40 shadow-inner">
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="text-muted-foreground text-[9px] font-black uppercase tracking-wider opacity-70 transition-colors duration-500">Hedef</span>
-                                            <input type="number" value={emp.targetHours} onChange={(e) => updateEmployeeTargetHours(emp.id, Number(e.target.value))} className="w-11 p-1 bg-card border border-border/50 shadow-sm rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 text-foreground text-center font-mono font-bold transition-all duration-300" />
-                                        </div>
-                                        <div className="flex flex-col items-end gap-0.5">
-                                            <span className="text-muted-foreground text-[9px] font-black uppercase tracking-wider opacity-70 transition-colors duration-500">Mevcut</span>
-                                            <span className={`px-2 py-1 rounded-md font-bold font-mono border transition-all duration-500 shadow-sm ${statusColor}`}>{assignedHours.toFixed(1)}s</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                {DAYS.map(day => ( <div key={day} className="p-2 transition-colors duration-500"><AssignmentCell employeeId={emp.id} day={day} /></div> ))}
-                            </div>
-                        );
-                    })}
-                    
-                    {employees.length === 0 && (
-                        <div className="h-full flex flex-col items-center justify-center text-muted-foreground/50 font-medium transition-colors duration-500 gap-3">
-                            <UserX size={48} className="opacity-20" />
-                            <span>Havuz boş. İşlem yapmak için sağ panelden personel ekleyin.</span>
+                        {/* Tablo Başlıkları */}
+                        <div className="grid grid-cols-[160px_repeat(7,1fr)] lg:grid-cols-[220px_repeat(7,1fr)] border-b border-border/60 bg-card/40 flex-shrink-0 transition-colors duration-500">
+                            <div className="p-3 lg:p-4 font-extrabold text-[10px] lg:text-xs uppercase tracking-widest text-muted-foreground transition-colors duration-500 flex items-center">Personel & Kota</div>
+                            {DAYS.map(day => <div key={day} className="p-3 lg:p-4 font-extrabold text-[10px] lg:text-xs uppercase tracking-widest text-center text-foreground transition-colors duration-500">{day}</div>)}
                         </div>
-                    )}
+                        
+                        {/* Tablo Gövdesi */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pb-10 transition-colors duration-500">
+                            {employees.map(emp => {
+                                let assignedHours = 0;
+                                assignments.filter(a => a.employeeId === emp.id && a.type !== 'IZIN' && a.type !== 'BOS').forEach(a => {
+                                    assignedHours += getDiff(a.startTime, a.endTime);
+                                });
+                                
+                                const isOvertime = assignedHours > emp.targetHours;
+                                const isPerfect = assignedHours === emp.targetHours;
+                                const statusColor = isOvertime ? "bg-red-500/15 text-red-600 border-red-500/20" : isPerfect ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/20" : "bg-primary/15 text-primary border-primary/20";
+
+                                return (
+                                    <div key={emp.id} className="grid grid-cols-[160px_repeat(7,1fr)] lg:grid-cols-[220px_repeat(7,1fr)] border-b border-border/40 hover:bg-card/60 transition-colors duration-300 group/row">
+                                        <div className="p-2 lg:p-4 flex flex-col justify-center border-r border-border/40 relative transition-colors duration-500">
+                                            <button onClick={() => removeEmployee(emp.id)} className="absolute top-2 right-2 text-muted-foreground/40 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-all duration-300 hover:scale-110"><Trash2 size={14}/></button>
+                                            
+                                            <span className="font-extrabold text-foreground text-xs lg:text-sm mb-2 lg:mb-3 truncate pr-4 lg:pr-6 transition-colors duration-500 drop-shadow-sm">{emp.name}</span>
+                                            
+                                            <div className="flex justify-between items-center text-xs transition-colors duration-500 bg-background/50 p-1.5 lg:p-2 rounded-xl border border-border/40 shadow-inner">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-muted-foreground text-[8px] lg:text-[9px] font-black uppercase tracking-wider opacity-70 transition-colors duration-500">Hedef</span>
+                                                    <input type="number" value={emp.targetHours} onChange={(e) => updateEmployeeTargetHours(emp.id, Number(e.target.value))} className="w-9 lg:w-11 p-1 bg-card border border-border/50 shadow-sm rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 text-foreground text-center font-mono font-bold text-[10px] lg:text-xs transition-all duration-300" />
+                                                </div>
+                                                <div className="flex flex-col items-end gap-0.5">
+                                                    <span className="text-muted-foreground text-[8px] lg:text-[9px] font-black uppercase tracking-wider opacity-70 transition-colors duration-500">Mevcut</span>
+                                                    <span className={`px-1.5 lg:px-2 py-1 rounded-md font-bold font-mono border transition-all duration-500 shadow-sm text-[10px] lg:text-xs ${statusColor}`}>{assignedHours.toFixed(1)}s</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {DAYS.map(day => ( <div key={day} className="p-1 lg:p-2 transition-colors duration-500"><AssignmentCell employeeId={emp.id} day={day} /></div> ))}
+                                    </div>
+                                );
+                            })}
+                            
+                            {employees.length === 0 && (
+                                <div className="h-full flex flex-col items-center justify-center text-muted-foreground/50 font-medium transition-colors duration-500 gap-3 min-h-[200px]">
+                                    <UserX size={48} className="opacity-20" />
+                                    <span className="text-sm px-4 text-center">Havuz boş. İşlem yapmak için alttaki panelden personel ekleyin.</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

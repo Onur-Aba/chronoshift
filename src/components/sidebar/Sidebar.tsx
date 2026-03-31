@@ -85,8 +85,7 @@ export const Sidebar = () => {
     return (
         // MİMARİ DOKUNUŞ: Sayfanın sağına yapışık olmak yerine, my-4 mr-4 (margin) ile süzülen (floating), 
         // rounded-3xl ile yumuşatılmış ve shadow-2xl ile derinleştirilmiş bir cam fanus (Glassmorphism).
-        <aside className="w-[380px] h-[calc(100%-2rem)] my-4 mr-4 flex-shrink-0 bg-card/90 backdrop-blur-xl border border-border/60 rounded-3xl shadow-2xl p-6 flex flex-col z-20 overflow-hidden relative transition-all duration-500">
-            
+<aside className="w-auto lg:w-[380px] h-[500px] lg:h-[calc(100%-2rem)] mx-4 lg:ml-0 my-4 lg:mr-4 flex-shrink-0 bg-card/90 backdrop-blur-xl border border-border/60 rounded-3xl shadow-2xl p-4 lg:p-6 flex flex-col z-20 overflow-hidden relative transition-all duration-500">            
             {/* Personel Ekleme Alanı */}
             <div className="mb-8 pb-6 border-b border-border/50">
                 <div className="flex items-center gap-2 mb-4 text-foreground">
