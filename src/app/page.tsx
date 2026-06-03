@@ -39,7 +39,7 @@ export default function Home() {
         };
 
         workerRef.current.onerror = (error) => {
-            console.error("[ChronoShift Worker Hatası]:", error);
+            console.error("[Vardia Worker Hatası]:", error);
             setAlertMessage("Optimizasyon motorunda bir hata oluştu. Verilerinizi kontrol edin.");
             setIsOptimizing(false);
         };
@@ -129,13 +129,13 @@ export default function Home() {
                         
                         {/* MİMARİ DÜZELTME: Kelimeler artık dikey bir hiyerarşide, birbirlerini sıkıştırmazlar. */}
                         <h1 className="text-5xl md:text-7xl font-extrabold text-foreground tracking-tight leading-[1.1] flex flex-col items-center gap-3">
-                            <span>Vardiya planlamanızı</span>
+                            <span>Vardiya planlayıcınızla</span>
                             <TextRotate />
-                            <span className="text-muted-foreground/70">yapın.</span>
+                            <span className="text-muted-foreground/70">çizelge kurun.</span>
                         </h1>
                         
                         <p className="text-lg md:text-xl text-muted-foreground font-medium max-w-2xl leading-relaxed mt-4">
-                            Operasyon ekipleri için tasarlanmış sade, hızlı ve kontrollü vardiya planlama paneli. Modunu seçin, personeli ekleyin ve haftalık planı net bir matriste yönetin.
+                            Mağaza, depo ve saha operasyonları için hazırlanmış haftalık vardiya planlayıcısı. Personeli ekleyin, çalışma saatlerini takip edin ve vardiya çizelgesini net bir matriste yönetin.
                         </p>
                         
                         {/* MİMARİ DÜZELTME: Karanlık Mod Parlaması (Glow) eklendi! */}
@@ -153,6 +153,34 @@ export default function Home() {
                     <CalendarBoard onOptimize={runOptimization} isOptimizing={isOptimizing} />
                     <Sidebar />
                 </main>
+
+                <section aria-labelledby="seo-title" className="relative z-10 bg-background px-6 py-14 border-t border-border/40">
+                    <div className="max-w-6xl mx-auto grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-start">
+                        <div className="space-y-4">
+                            <span className="text-xs font-black uppercase tracking-[0.28em] text-primary">Vardiya planlama</span>
+                            <h2 id="seo-title" className="text-3xl md:text-4xl font-black tracking-tight text-foreground">
+                                Haftalık vardiya çizelgesi için sade ve kontrollü planlama alanı
+                            </h2>
+                            <p className="text-muted-foreground leading-relaxed text-base md:text-lg">
+                                Vardia; mağaza vardiya planlama, depo vardiya planlama, izin günü dağıtımı ve personel çalışma saati takibi için kullanılan modern bir vardiya planlayıcısıdır. Tek ekranda personel listesini, haftalık vardiya matrisini ve çalışma saatlerini birlikte yönetmenizi sağlar.
+                            </p>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {[
+                                "Haftalık vardiya planı",
+                                "Personel çizelgeleme",
+                                "İzin günü takibi",
+                                "Mağaza ve depo modu",
+                                "Sürükle bırak düzenleme",
+                                "Çalışma saati kontrolü",
+                            ].map((item) => (
+                                <div key={item} className="rounded-2xl border border-border bg-card/70 px-4 py-3 shadow-sm">
+                                    <p className="text-sm font-bold text-foreground">{item}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
 
                 <Footer />
             </div>

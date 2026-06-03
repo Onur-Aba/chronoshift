@@ -44,7 +44,7 @@ export const Header = () => {
   return (
     <header className="relative w-full z-50 bg-[var(--background)] flex-shrink-0 transition-colors duration-500 pb-2 border-b border-border/40">
       <CardNav
-        logoText="chronoshift"
+        logoText="vardia"
         items={navItems}
         baseColor="var(--card)"
         menuColor="var(--foreground)"
