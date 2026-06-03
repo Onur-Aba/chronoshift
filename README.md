@@ -3,7 +3,7 @@
 <div align="center">
   <h1>ChronoShift</h1>
   <a href="https://git.io/typing-svg">
-    <img src="https://readme-typing-svg.herokuapp.com?font=Inter&pause=1000&color=4F46E5&center=true&vCenter=true&width=600&lines=Yapay+Zeka+Destekli+Planlama;Kusursuz+Sistem+Mimarisi;Modern+UI%2FUX+Tasarimi;Next.js+%26+Tailwind+CSS+v4" alt="Typing SVG" />
+    <img src="https://readme-typing-svg.herokuapp.com?font=Inter&pause=1000&color=4F46E5&center=true&vCenter=true&width=600&lines=Operasyon+Odakli+Planlama;Kusursuz+Sistem+Mimarisi;Modern+UI%2FUX+Tasarimi;Next.js+%26+Tailwind+CSS+v4" alt="Typing SVG" />
   </a>
   <br/>
   <p align="center" width="80%">
@@ -34,7 +34,7 @@
 
 | Özellik | Detay |
 | :--- | :--- |
-| **Yapay Zeka Destekli Motor** | Ana iş parçacığını (Main Thread) dondurmadan, arkaplanda `Web Worker` kullanarak saniyeler içinde adil ve eksiksiz vardiya dağıtımı yapar. |
+| **Otomatik Planlama Motoru** | Ana iş parçacığını (Main Thread) dondurmadan, arkaplanda `Web Worker` kullanarak saniyeler içinde adil ve eksiksiz vardiya dağıtımı yapar. |
 | **Dokunsal Sürükle-Bırak (DnD)** | `@dnd-kit/core` entegrasyonu ile saat kartlarını takvim üzerinde pürüzsüzce kaydırın, değiştirin ve kilitleyin. |
 | **Kalıcı Veri (Persistence)** | `Zustand` ve `LocalStorage` mimarisi sayesinde oluşturulan takvimler, sayfayı yenileseniz dahi asla kaybolmaz. |
 | **Kusursuz Tema Geçişi** | Saf CSS mantığı ve donanım ivmeli (GPU) geçişler ile Dark/Light mod arasında ipeksi ve senkronize renk uyumu. |

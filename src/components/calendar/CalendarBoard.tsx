@@ -2,147 +2,184 @@
 
 import { useAppStore } from "@/store/useAppStore";
 import { useDroppable } from "@dnd-kit/core";
-import { Pin, Trash2, UserX } from "lucide-react";
+import { Pin, Trash2, UserX, Clock3, Warehouse } from "lucide-react";
+import { DepotShiftType } from "@/types";
 
 const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+
+const getDiff = (s: string, e: string) => {
+    if(!s || !e) return 0;
+    const [sH, sM] = s.split(':').map(Number);
+    const [eH, eM] = e.split(':').map(Number);
+    let diff = (eH + eM/60) - (sH + sM/60);
+    return diff < 0 ? diff + 24 : diff;
+};
+
+const getNetHours = (s: string, e: string, breakMinutes = 0) => {
+    const gross = getDiff(s, e);
+    return Math.max(0, gross - breakMinutes / 60);
+};
+
+const formatHours = (hours: number) => Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
 
 const AssignmentCell = ({ employeeId, day }: { employeeId: string, day: string }) => {
     const id = `${employeeId}-${day}`;
     const { isOver, setNodeRef } = useDroppable({ id, data: { type: "Cell", id } });
-    const { assignments, updateAssignment, presets } = useAppStore(); 
+    const { assignments, updateAssignment, presets, operationMode } = useAppStore(); 
     const assign = assignments.find(a => a.id === id);
+    const isBos = !assign || assign.type === 'BOS';
 
-    let customStyle = {};
-    let isBos = !assign || assign.type === 'BOS';
+    const presetColor = !isBos && assign ? presets[assign.type]?.color || '#94a3b8' : '#94a3b8';
+    const customStyle = !isBos && assign ? {
+        backgroundColor: `${presetColor}14`,
+        borderColor: `${presetColor}55`,
+        color: presetColor,
+        boxShadow: `inset 0 0 18px ${presetColor}0D`
+    } : {};
 
-    // Premium Blending: Seçilen rengin çok hafif bir yansıması
-    if (!isBos && assign) {
-        const presetColor = presets[assign.type]?.color || '#94a3b8';
-        customStyle = {
-            backgroundColor: `${presetColor}1A`, 
-            borderColor: `${presetColor}4D`, 
-            color: presetColor,
-            boxShadow: `inset 0 0 12px ${presetColor}0A` // Hafif iç parlama
-        };
-    }
+    const isRest = assign?.type === 'IZIN';
+    const isDepot = operationMode === 'DEPO';
 
     return (
         <div 
             ref={setNodeRef} 
-            style={customStyle} 
-            // UX DOKUNUŞU: Boş hücreler içe çökük (shadow-inner), dolu hücreler şık çerçeveli. Drag-over anında neon parlama.
-            className={`relative flex flex-col items-center justify-center p-2 min-h-[76px] border rounded-2xl transition-all duration-300 ease-out 
-                ${isBos ? 'bg-background/50 border-border/40 border-dashed text-muted-foreground shadow-inner hover:bg-background/80' : 'shadow-sm hover:shadow-md hover:scale-[1.02]'} 
-                ${isOver ? 'ring-2 ring-primary bg-primary/5 scale-105 shadow-xl z-10' : ''}`}
+            style={customStyle}
+            className={`relative flex flex-col items-center justify-center p-2 min-h-[78px] border rounded-2xl transition-all duration-200 ease-out
+                ${isBos ? 'bg-background/45 border-border/50 border-dashed text-muted-foreground shadow-inner hover:bg-background/80' : 'shadow-sm hover:shadow-md hover:scale-[1.01]'} 
+                ${isOver ? 'ring-2 ring-primary bg-primary/5 scale-[1.03] shadow-xl z-10' : ''}`}
         >
-            {assign?.isLocked && <Pin size={12} className="absolute top-2 right-2 opacity-40 drop-shadow-md" />}
-            
+            {assign?.isLocked && <Pin size={12} className="absolute top-2 right-2 opacity-45" />}
             {!isBos && assign ? (
-                assign.type === 'IZIN' ? ( 
-                    <span className="font-black text-2xl opacity-40 tracking-widest transition-opacity duration-500 drop-shadow-sm">X</span> 
+                isRest ? (
+                    <span className="font-black text-2xl opacity-40 tracking-widest">X</span>
                 ) : (
-                    <div className="flex flex-col gap-1.5 items-center z-10 w-full px-1 transition-all duration-500">
-                        {/* Premium Time Inputs (Kapsül Tasarım) */}
-                        <div className="bg-background/80 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
-                            <input type="time" value={assign.startTime} onChange={(e) => updateAssignment(id, assign.type, e.target.value, assign.endTime, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer hover:opacity-70 transition-opacity" />
+                    <div className="flex flex-col gap-1.5 items-center z-10 w-full px-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-foreground/80">{presets[assign.type]?.label || assign.type}</span>
+                        <div className="bg-background/85 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
+                            <input type="time" value={assign.startTime} onChange={(e) => updateAssignment(id, assign.type, e.target.value, assign.endTime, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer text-foreground" />
                         </div>
-                        <div className="bg-background/80 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
-                            <input type="time" value={assign.endTime} onChange={(e) => updateAssignment(id, assign.type, assign.startTime, e.target.value, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer hover:opacity-70 transition-opacity" />
+                        <div className="bg-background/85 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
+                            <input type="time" value={assign.endTime} onChange={(e) => updateAssignment(id, assign.type, assign.startTime, e.target.value, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer text-foreground" />
                         </div>
+                        {isDepot && (presets[assign.type]?.breakMinutes || 0) > 0 && <span className="text-[9px] font-bold text-muted-foreground">1 sa. mola</span>}
+                        {assign.type === 'ARACI' && <span className="text-[9px] font-bold text-muted-foreground">manuel</span>}
                     </div>
                 )
-            ) : <span className="text-[10px] font-medium tracking-widest uppercase opacity-30 transition-opacity duration-500">BOS</span>}
+            ) : <span className="text-[10px] font-semibold tracking-widest uppercase opacity-35">BOŞ</span>}
         </div>
     );
 };
 
 export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => void; isOptimizing: boolean; }) => {
-    const { currentState, employees, assignments, clearCalendar, clearEmployees, updateEmployeeTargetHours, removeEmployee } = useAppStore();
-
-    const getDiff = (s: string, e: string) => {
-        if(!s || !e) return 0;
-        const [sH, sM] = s.split(':').map(Number);
-        const [eH, eM] = e.split(':').map(Number);
-        let diff = (eH + eM/60) - (sH + sM/60);
-        return diff < 0 ? diff + 24 : diff;
-    };
+    const {
+        currentState,
+        employees,
+        assignments,
+        clearCalendar,
+        clearEmployees,
+        updateEmployeeTargetHours,
+        updateEmployeeDepotShiftType,
+        removeEmployee,
+        operationMode,
+        presets
+    } = useAppStore();
+    const isDepot = operationMode === 'DEPO';
 
     return (
-        // MİMARİ DÜZELTME: Mobilde mx-4 (sağ sol boşluk), Masaüstünde ml-4 mr-2
-        <div className="flex-1 my-4 mx-4 lg:ml-4 lg:mr-2 p-4 lg:p-6 flex flex-col bg-card/90 backdrop-blur-xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden relative transition-all duration-500 ease-in-out">
-            
-            {/* Üst Kontrol Paneli */}
-            {/* MOBİL UX: Flex-col ile başlık ve butonlar telefonda alt alta, butonlar sarmallı (flex-wrap) */}
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 lg:gap-0 mb-4 lg:mb-6 flex-shrink-0 transition-colors duration-500">
+        <div className="flex-1 my-4 mx-4 lg:ml-4 lg:mr-2 p-4 lg:p-6 flex flex-col bg-card/95 backdrop-blur-xl border border-border/70 rounded-[2rem] shadow-2xl overflow-hidden relative transition-all duration-500 ease-in-out">
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-5 flex-shrink-0">
                 <div>
-                    <h1 className="text-2xl lg:text-3xl font-extrabold text-foreground tracking-tight transition-colors duration-500 drop-shadow-sm">Vardiya Matrisi</h1>
+                    <div className="flex items-center gap-2 mb-2">
+                        {isDepot ? <Warehouse size={18} className="text-primary" /> : <Clock3 size={18} className="text-primary" />}
+                        <span className="text-[11px] font-black uppercase tracking-[0.24em] text-primary">{isDepot ? 'Depo Operasyonu' : 'Mağaza Operasyonu'}</span>
+                    </div>
+                    <h1 className="text-2xl lg:text-3xl font-black text-foreground tracking-tight">Vardiya Matrisi</h1>
                     <div className="flex items-center gap-2 mt-1.5">
-                        <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest transition-colors duration-500">Durum: <span className="text-primary">{currentState}</span></span>
+                        <div className="w-2 h-2 rounded-full bg-primary"></div>
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Durum: <span className="text-primary">{currentState}</span></span>
                     </div>
                 </div>
-                <div className="flex flex-wrap gap-2 lg:gap-3 w-full lg:w-auto">
-                    <button onClick={clearEmployees} className="flex-1 lg:flex-none justify-center px-3 lg:px-4 py-2.5 rounded-xl font-bold text-xs lg:text-sm text-red-600 bg-red-500/10 hover:bg-red-500/20 flex items-center gap-2 transition-all duration-300 active:scale-95 shadow-sm border border-red-500/10"><UserX size={15}/> Sil</button>
-                    <button onClick={clearCalendar} className="flex-1 lg:flex-none justify-center px-3 lg:px-4 py-2.5 rounded-xl font-bold text-xs lg:text-sm text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-2 transition-all duration-300 active:scale-95 shadow-sm border border-amber-500/10"><Trash2 size={15}/> Temizle</button>
-                    <button onClick={onOptimize} disabled={isOptimizing} className="w-full lg:w-auto justify-center px-4 lg:px-7 py-2.5 rounded-xl font-extrabold text-sm text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30 transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 disabled:hover:scale-100 flex items-center gap-2">
-                        ✨ {isOptimizing ? 'Hesaplanıyor...' : 'Otomatik Diz'}
+                <div className="flex flex-wrap gap-2 lg:gap-3 w-full xl:w-auto">
+                    <button onClick={clearEmployees} className="flex-1 xl:flex-none justify-center px-3 lg:px-4 py-2.5 rounded-xl font-bold text-xs lg:text-sm text-red-600 bg-red-500/10 hover:bg-red-500/20 flex items-center gap-2 transition-all active:scale-95 border border-red-500/10"><UserX size={15}/> Personel Sil</button>
+                    <button onClick={clearCalendar} className="flex-1 xl:flex-none justify-center px-3 lg:px-4 py-2.5 rounded-xl font-bold text-xs lg:text-sm text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-2 transition-all active:scale-95 border border-amber-500/10"><Trash2 size={15}/> Takvimi Temizle</button>
+                    <button onClick={onOptimize} disabled={isOptimizing} className="w-full xl:w-auto justify-center px-5 lg:px-7 py-2.5 rounded-xl font-extrabold text-sm text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25 transition-all hover:translate-y-[-1px] active:scale-95 disabled:opacity-70 disabled:hover:translate-y-0 flex items-center gap-2">
+                        {isOptimizing ? 'Hesaplanıyor...' : 'Otomatik Diz'}
                     </button>
                 </div>
             </div>
 
-            {/* Tablo Konteyneri */}
-            <div className="flex-1 bg-background/40 backdrop-blur-sm border border-border/50 rounded-2xl shadow-inner flex flex-col min-h-0 transition-colors duration-500 ease-in-out overflow-hidden relative">
-                
-                {/* MİMARİ DEVRİM: Yatay Kaydırma (Horizontal Scroll) Alanı */}
+            {isDepot && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                    <div className="rounded-2xl border border-border/60 bg-background/50 p-4">
+                        <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-1">Gündüz Planı</div>
+                        <div className="text-sm font-bold text-foreground">12:30 - 22:30 · 10 saat · 1 saat mola · 50 sa./hafta</div>
+                    </div>
+                    <div className="rounded-2xl border border-border/60 bg-background/50 p-4">
+                        <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-1">Gece Planı</div>
+                        <div className="text-sm font-bold text-foreground">00:30 - 09:00 · 8.5 saat · 1 saat mola · 42.5 sa./hafta</div>
+                    </div>
+                    <div className="rounded-2xl border border-border/60 bg-background/50 p-4">
+                        <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-1">Aracı Kartı</div>
+                        <div className="text-sm font-bold text-foreground">Otomatik atanmaz · gerektiğinde manuel sürüklenir</div>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex-1 bg-background/45 backdrop-blur-sm border border-border/60 rounded-2xl shadow-inner flex flex-col min-h-0 overflow-hidden relative">
                 <div className="flex-1 overflow-x-auto overflow-y-hidden flex flex-col w-full custom-scrollbar">
-                    {/* MOBİL UX: Eğer ekran darsa tabloyu 900px'e zorla, böylece ezilmez, sağa kaydırılabilir olur */}
                     <div className="min-w-[900px] lg:min-w-0 flex flex-col flex-1">
-                        
-                        {/* Tablo Başlıkları */}
-                        <div className="grid grid-cols-[160px_repeat(7,1fr)] lg:grid-cols-[220px_repeat(7,1fr)] border-b border-border/60 bg-card/40 flex-shrink-0 transition-colors duration-500">
-                            <div className="p-3 lg:p-4 font-extrabold text-[10px] lg:text-xs uppercase tracking-widest text-muted-foreground transition-colors duration-500 flex items-center">Personel & Kota</div>
-                            {DAYS.map(day => <div key={day} className="p-3 lg:p-4 font-extrabold text-[10px] lg:text-xs uppercase tracking-widest text-center text-foreground transition-colors duration-500">{day}</div>)}
+                        <div className="grid grid-cols-[160px_repeat(7,1fr)] lg:grid-cols-[220px_repeat(7,1fr)] border-b border-border/60 bg-card/60 flex-shrink-0">
+                            <div className="p-3 lg:p-4 font-black text-[10px] lg:text-xs uppercase tracking-widest text-muted-foreground flex items-center">Personel & Kota</div>
+                            {DAYS.map(day => <div key={day} className="p-3 lg:p-4 font-black text-[10px] lg:text-xs uppercase tracking-widest text-center text-foreground">{day}</div>)}
                         </div>
-                        
-                        {/* Tablo Gövdesi */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar pb-10 transition-colors duration-500">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pb-10">
                             {employees.map(emp => {
                                 let assignedHours = 0;
                                 assignments.filter(a => a.employeeId === emp.id && a.type !== 'IZIN' && a.type !== 'BOS').forEach(a => {
-                                    assignedHours += getDiff(a.startTime, a.endTime);
+                                    const preset = presets[a.type];
+                                    if (isDepot && typeof preset?.plannedHours === 'number') {
+                                        assignedHours += preset.plannedHours;
+                                    } else {
+                                        assignedHours += getNetHours(a.startTime, a.endTime, isDepot ? (preset?.breakMinutes || 0) : 0);
+                                    }
                                 });
-                                
                                 const isOvertime = assignedHours > emp.targetHours;
-                                const isPerfect = assignedHours === emp.targetHours;
+                                const isPerfect = Math.abs(assignedHours - emp.targetHours) < 0.01;
                                 const statusColor = isOvertime ? "bg-red-500/15 text-red-600 border-red-500/20" : isPerfect ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/20" : "bg-primary/15 text-primary border-primary/20";
+                                const depotShiftType = emp.depotShiftType ?? 'GUNDUZ';
 
                                 return (
-                                    <div key={emp.id} className="grid grid-cols-[160px_repeat(7,1fr)] lg:grid-cols-[220px_repeat(7,1fr)] border-b border-border/40 hover:bg-card/60 transition-colors duration-300 group/row">
-                                        <div className="p-2 lg:p-4 flex flex-col justify-center border-r border-border/40 relative transition-colors duration-500">
-                                            <button onClick={() => removeEmployee(emp.id)} className="absolute top-2 right-2 text-muted-foreground/40 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-all duration-300 hover:scale-110"><Trash2 size={14}/></button>
-                                            
-                                            <span className="font-extrabold text-foreground text-xs lg:text-sm mb-2 lg:mb-3 truncate pr-4 lg:pr-6 transition-colors duration-500 drop-shadow-sm">{emp.name}</span>
-                                            
-                                            <div className="flex justify-between items-center text-xs transition-colors duration-500 bg-background/50 p-1.5 lg:p-2 rounded-xl border border-border/40 shadow-inner">
-                                                <div className="flex flex-col gap-0.5">
-                                                    <span className="text-muted-foreground text-[8px] lg:text-[9px] font-black uppercase tracking-wider opacity-70 transition-colors duration-500">Hedef</span>
-                                                    <input type="number" value={emp.targetHours} onChange={(e) => updateEmployeeTargetHours(emp.id, Number(e.target.value))} className="w-9 lg:w-11 p-1 bg-card border border-border/50 shadow-sm rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 text-foreground text-center font-mono font-bold text-[10px] lg:text-xs transition-all duration-300" />
-                                                </div>
-                                                <div className="flex flex-col items-end gap-0.5">
-                                                    <span className="text-muted-foreground text-[8px] lg:text-[9px] font-black uppercase tracking-wider opacity-70 transition-colors duration-500">Mevcut</span>
-                                                    <span className={`px-1.5 lg:px-2 py-1 rounded-md font-bold font-mono border transition-all duration-500 shadow-sm text-[10px] lg:text-xs ${statusColor}`}>{assignedHours.toFixed(1)}s</span>
-                                                </div>
+                                    <div key={emp.id} className="grid grid-cols-[160px_repeat(7,1fr)] lg:grid-cols-[220px_repeat(7,1fr)] border-b border-border/40 hover:bg-card/65 transition-colors group/row">
+                                        <div className="p-2 lg:p-4 flex flex-col justify-center border-r border-border/40 relative">
+                                            <button onClick={() => removeEmployee(emp.id)} className="absolute top-2 right-2 text-muted-foreground/40 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-all hover:scale-110"><Trash2 size={14}/></button>
+                                            <span className="font-black text-foreground text-xs lg:text-sm mb-2 truncate pr-5">{emp.name}</span>
+                                            {isDepot && (
+                                                <select
+                                                    value={depotShiftType}
+                                                    onChange={(event) => updateEmployeeDepotShiftType(emp.id, event.target.value as DepotShiftType)}
+                                                    className="mb-2 w-full bg-background/70 border border-border/50 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
+                                                >
+                                                    <option value="GUNDUZ">Gündüz Personeli</option>
+                                                    <option value="GECE">Gece Personeli</option>
+                                                </select>
+                                            )}
+                                            <div className={`inline-flex items-center w-fit px-2 py-1 rounded-lg border text-[10px] font-black ${statusColor}`}>
+                                                {formatHours(assignedHours)} / {formatHours(emp.targetHours)} sa.
                                             </div>
+                                            {!isDepot && (
+                                                <input type="number" step="0.5" value={emp.targetHours} onChange={(e) => updateEmployeeTargetHours(emp.id, Number(e.target.value))} className="mt-2 w-20 bg-background/70 border border-border/50 rounded-lg px-2 py-1 text-[11px] font-bold outline-none focus:ring-2 focus:ring-primary/30" />
+                                            )}
                                         </div>
-                                        {DAYS.map(day => ( <div key={day} className="p-1 lg:p-2 transition-colors duration-500"><AssignmentCell employeeId={emp.id} day={day} /></div> ))}
+                                        {DAYS.map(day => <div key={day} className="p-1.5 lg:p-2 border-r border-border/20 last:border-r-0"><AssignmentCell employeeId={emp.id} day={day} /></div>)}
                                     </div>
                                 );
                             })}
-                            
                             {employees.length === 0 && (
-                                <div className="h-full flex flex-col items-center justify-center text-muted-foreground/50 font-medium transition-colors duration-500 gap-3 min-h-[200px]">
-                                    <UserX size={48} className="opacity-20" />
-                                    <span className="text-sm px-4 text-center">Havuz boş. İşlem yapmak için alttaki panelden personel ekleyin.</span>
+                                <div className="h-full min-h-[360px] flex items-center justify-center text-center p-8">
+                                    <div className="max-w-sm">
+                                        <div className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-2">Başlamak için personel ekleyin</div>
+                                        <p className="text-sm text-muted-foreground">Sağ panelden ekip üyelerini ekledikten sonra vardiya kalıplarını sürükleyebilir veya otomatik dizim çalıştırabilirsiniz.</p>
+                                    </div>
                                 </div>
                             )}
                         </div>

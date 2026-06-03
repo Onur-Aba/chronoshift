@@ -1,33 +1,22 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://chronoshift-rosy.vercel.app/"), // Kendi Vercel domainin ne olacaksa onu yaz
   // 1. TEMEL SEO KİMLİĞİ (Google Arama Sonuçları)
   title: {
-    default: "ChronoShift | Yapay Zeka Destekli Akıllı Vardiya Planlama",
+    default: "ChronoShift | Akıllı Vardiya Planlama",
     template: "%s | ChronoShift"
   },
-  description: "Perakende ve mağazacılık operasyonları için geliştirilmiş, yapay zeka destekli otomatik vardiya çizelgeleme ve personel yönetim sistemi.",
+  description: "Operasyon ekipleri için geliştirilmiş otomatik vardiya çizelgeleme ve personel yönetim sistemi.",
   keywords: [
     "vardiya planlama", 
     "otomatik vardiya programı", 
     "personel yönetimi", 
     "nöbet çizelgesi", 
     "mağaza yönetimi", 
-    "AI çizelgeleme", 
     "ChronoShift"
   ],
   authors: [{ name: "Onur Aba", url: "https://onur-aba.vercel.app/" }],
@@ -84,7 +73,7 @@ export default function RootLayout({
     <html
       lang="tr"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

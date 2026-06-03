@@ -18,7 +18,7 @@ import { AuroraBackground } from "@/components/ui/aurora-background";
 const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
 export default function Home() {
-    const { currentState, updateAssignment, setAppState, assignments, employees, presets, globalTargetHours, useGlobalTargetHours } = useAppStore();
+    const { currentState, updateAssignment, setAppState } = useAppStore();
     
     const [pendingAction, setPendingAction] = useState<{ cellId: string, preset: ShiftPreset } | null>(null);
     const [isOptimizing, setIsOptimizing] = useState(false);
@@ -48,12 +48,22 @@ export default function Home() {
     }, []);
 
     const runOptimization = () => {
+        const {
+            employees,
+            assignments,
+            presets,
+            globalTargetHours,
+            useGlobalTargetHours,
+            operationMode
+        } = useAppStore.getState();
+
         if (employees.length === 0) {
             setAlertMessage("Takvimi oluşturabilmek için lütfen önce personel havuzuna kişi ekleyin.");
             return;
         }
+
         setIsOptimizing(true);
-        workerRef.current?.postMessage({ employees, assignments, presets, days: DAYS, globalTargetHours, useGlobalTargetHours });
+        workerRef.current?.postMessage({ employees, assignments, presets, days: DAYS, globalTargetHours, useGlobalTargetHours, operationMode });
     };
 
     const handleDragStart = (event: DragStartEvent) => {
@@ -114,7 +124,7 @@ export default function Home() {
                         className="relative flex flex-col gap-6 items-center justify-center px-4 max-w-4xl mx-auto text-center z-20"
                     >
                         <div className="inline-flex items-center justify-center px-4 py-1.5 rounded-full border border-primary/20 bg-background/50 backdrop-blur-md text-primary text-xs font-bold tracking-widest uppercase mb-2 shadow-sm">
-                            Vardiya Motoru v2.0
+                            Planlama Stüdyosu
                         </div>
                         
                         {/* MİMARİ DÜZELTME: Kelimeler artık dikey bir hiyerarşide, birbirlerini sıkıştırmazlar. */}
@@ -125,7 +135,7 @@ export default function Home() {
                         </h1>
                         
                         <p className="text-lg md:text-xl text-muted-foreground font-medium max-w-2xl leading-relaxed mt-4">
-                            Perakende ve mağazacılık operasyonları için tasarlanmış yapay zeka destekli çizelgeleme sistemi. Açılış-kapanış dengelerini korur, haftalık hedef saatlerinizi hesaplar ve adilce dağıtır.
+                            Operasyon ekipleri için tasarlanmış sade, hızlı ve kontrollü vardiya planlama paneli. Modunu seçin, personeli ekleyin ve haftalık planı net bir matriste yönetin.
                         </p>
                         
                         {/* MİMARİ DÜZELTME: Karanlık Mod Parlaması (Glow) eklendi! */}

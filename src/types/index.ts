@@ -1,6 +1,15 @@
-export type ShiftType = 'SABAH' | 'AKSAM' | 'FULL' | 'IZIN' | 'BOS';
+export type ShiftType = 'SABAH' | 'AKSAM' | 'FULL' | 'IZIN' | 'GUNDUZ' | 'GECE' | 'ARACI' | 'BOS';
 
-export type Employee = { id: string; name: string; targetHours: number; };
+export type DepotShiftType = 'GUNDUZ' | 'GECE';
+
+export type OperationMode = 'MAGAZA' | 'DEPO';
+
+export type Employee = {
+    id: string;
+    name: string;
+    targetHours: number;
+    depotShiftType?: DepotShiftType;
+};
 
 export type Assignment = {
     id: string; 
@@ -12,7 +21,15 @@ export type Assignment = {
     isLocked: boolean;
 };
 
-// KUSURSUZ MİMARİ: color eklendi
-export type ShiftPreset = { type: ShiftType; startTime: string; endTime: string; label: string; color: string; };
+export type ShiftPreset = {
+    type: ShiftType;
+    startTime: string;
+    endTime: string;
+    label: string;
+    color: string;
+    breakMinutes?: number;
+    targetHours?: number;
+    plannedHours?: number;
+};
 
 export type AppState = 'BOS' | 'ELLE_DIZILIYOR' | 'OTO_DIZILDI';

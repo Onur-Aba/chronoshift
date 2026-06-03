@@ -1,28 +1,44 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Employee, Assignment, ShiftPreset, AppState } from '@/types';
+import { Employee, Assignment, ShiftPreset, AppState, OperationMode, DepotShiftType } from '@/types';
 
-const defaultPresets: Record<string, ShiftPreset> = {
+export const MAGAZA_PRESETS: Record<string, ShiftPreset> = {
     SABAH: { type: 'SABAH', startTime: '08:45', endTime: '17:45', label: 'Sabah', color: '#0ea5e9' }, 
     AKSAM: { type: 'AKSAM', startTime: '13:15', endTime: '21:15', label: 'Akşam', color: '#6366f1' }, 
     FULL: { type: 'FULL', startTime: '08:45', endTime: '21:15', label: 'Full', color: '#f59e0b' },   
     IZIN: { type: 'IZIN', startTime: '', endTime: '', label: 'İzin', color: '#71717a' }          
 };
 
+export const DEPO_PRESETS: Record<string, ShiftPreset> = {
+    GUNDUZ: { type: 'GUNDUZ', startTime: '12:30', endTime: '22:30', label: 'Gündüz', color: '#ef4444', breakMinutes: 60, targetHours: 50, plannedHours: 10 },
+    GECE: { type: 'GECE', startTime: '00:30', endTime: '09:00', label: 'Gece', color: '#f8fafc', breakMinutes: 60, targetHours: 42.5, plannedHours: 8.5 },
+    IZIN: { type: 'IZIN', startTime: '', endTime: '', label: 'İzin', color: '#71717a' },
+    ARACI: { type: 'ARACI', startTime: '', endTime: '', label: 'Aracı', color: '#10b981' }
+};
+
+const DEFAULT_PRESETS_BY_MODE: Record<OperationMode, Record<string, ShiftPreset>> = {
+    MAGAZA: MAGAZA_PRESETS,
+    DEPO: DEPO_PRESETS
+};
+
 interface StoreState {
     employees: Employee[];
     assignments: Assignment[];
     presets: Record<string, ShiftPreset>;
+    modePresets: Record<OperationMode, Record<string, ShiftPreset>>;
+    operationMode: OperationMode;
     currentState: AppState;
     
     globalTargetHours: number;
     useGlobalTargetHours: boolean;
     setGlobalTargetSettings: (useGlobal: boolean, hours: number) => void;
+    setOperationMode: (mode: OperationMode) => void;
     
-    addEmployee: (name: string, targetHours: number) => void;
+    addEmployee: (name: string, targetHours?: number, depotShiftType?: DepotShiftType) => void;
     removeEmployee: (id: string) => void;
     clearEmployees: () => void;
     updateEmployeeTargetHours: (id: string, hours: number) => void;
+    updateEmployeeDepotShiftType: (id: string, depotShiftType: DepotShiftType) => void;
     
     updatePreset: (type: string, startTime: string, endTime: string, color: string) => void;
     resetPresets: () => void; 
@@ -32,37 +48,137 @@ interface StoreState {
     setAppState: (state: AppState) => void;
 }
 
+const getModeTarget = (mode: OperationMode) => mode === 'DEPO' ? 50 : 45;
+const getDepotTarget = (depotShiftType: DepotShiftType = 'GUNDUZ') => DEPO_PRESETS[depotShiftType]?.targetHours ?? 50;
+const getFallbackDepotShiftType = (index: number): DepotShiftType => index % 2 === 0 ? 'GUNDUZ' : 'GECE';
+
+const normalizeEmployees = (employees: Employee[] = [], mode: OperationMode = 'MAGAZA', useGlobalTargetHours = true): Employee[] => {
+    const modeTarget = getModeTarget(mode);
+
+    return employees.map((employee, index) => {
+        const depotShiftType = employee.depotShiftType ?? getFallbackDepotShiftType(index);
+        const targetHours = mode === 'DEPO'
+            ? getDepotTarget(depotShiftType)
+            : useGlobalTargetHours
+                ? modeTarget
+                : employee.targetHours;
+
+        return {
+            ...employee,
+            depotShiftType,
+            targetHours
+        };
+    });
+};
+
 export const useAppStore = create<StoreState>()(
     persist(
-        (set, get) => ({
-            employees: [], assignments: [], presets: defaultPresets, currentState: 'BOS',
-            globalTargetHours: 45, useGlobalTargetHours: true,
+        (set) => ({
+            employees: [],
+            assignments: [],
+            operationMode: 'MAGAZA',
+            modePresets: DEFAULT_PRESETS_BY_MODE,
+            presets: MAGAZA_PRESETS,
+            currentState: 'BOS',
+            globalTargetHours: 45,
+            useGlobalTargetHours: true,
 
             setGlobalTargetSettings: (useGlobal, hours) => set({ useGlobalTargetHours: useGlobal, globalTargetHours: hours }),
 
-            addEmployee: (name, targetHours) => set((state) => ({ employees: [...state.employees, { id: crypto.randomUUID(), name, targetHours }] })),
+            setOperationMode: (mode) => set((state) => {
+                const nextPresets = state.modePresets?.[mode] || DEFAULT_PRESETS_BY_MODE[mode];
+                const targetHours = getModeTarget(mode);
+                return {
+                    operationMode: mode,
+                    presets: nextPresets,
+                    assignments: [],
+                    currentState: 'BOS',
+                    globalTargetHours: targetHours,
+                    employees: normalizeEmployees(state.employees, mode, state.useGlobalTargetHours)
+                };
+            }),
+
+            addEmployee: (name, targetHours, depotShiftType = 'GUNDUZ') => set((state) => {
+                const hours = state.operationMode === 'DEPO'
+                    ? getDepotTarget(depotShiftType)
+                    : targetHours ?? state.globalTargetHours ?? getModeTarget(state.operationMode);
+
+                return {
+                    employees: [
+                        ...state.employees,
+                        { id: crypto.randomUUID(), name, targetHours: hours, depotShiftType }
+                    ]
+                };
+            }),
             removeEmployee: (id) => set((state) => ({ employees: state.employees.filter(e => e.id !== id), assignments: state.assignments.filter(a => a.employeeId !== id) })),
             clearEmployees: () => set({ employees: [], assignments: [], currentState: 'BOS' }),
             updateEmployeeTargetHours: (id, hours) => set((state) => ({ employees: state.employees.map(e => e.id === id ? { ...e, targetHours: hours } : e) })),
-
-            updatePreset: (type, startTime, endTime, color) => set((state) => ({ 
-                presets: { ...state.presets, [type]: { ...state.presets[type], startTime, endTime, color } } 
+            updateEmployeeDepotShiftType: (id, depotShiftType) => set((state) => ({
+                employees: state.employees.map(employee => employee.id === id
+                    ? {
+                        ...employee,
+                        depotShiftType,
+                        targetHours: state.operationMode === 'DEPO' ? getDepotTarget(depotShiftType) : employee.targetHours
+                    }
+                    : employee
+                ),
+                assignments: [],
+                currentState: 'BOS'
             })),
-            resetPresets: () => set({ presets: defaultPresets }), 
+
+            updatePreset: (type, startTime, endTime, color) => set((state) => {
+                const previousPreset = state.presets[type];
+                if (!previousPreset) return {};
+
+                const nextPreset = { ...previousPreset, startTime, endTime, color };
+                const nextPresets = { ...state.presets, [type]: nextPreset };
+                const nextModePresets = {
+                    ...state.modePresets,
+                    [state.operationMode]: nextPresets
+                };
+
+                return {
+                    presets: nextPresets,
+                    modePresets: nextModePresets,
+                    assignments: state.assignments.map(assignment => {
+                        if (assignment.type !== type) return assignment;
+                        return {
+                            ...assignment,
+                            startTime: nextPreset.startTime,
+                            endTime: nextPreset.endTime
+                        };
+                    })
+                };
+            }),
+            resetPresets: () => set((state) => {
+                const defaults = DEFAULT_PRESETS_BY_MODE[state.operationMode];
+                return {
+                    presets: defaults,
+                    modePresets: { ...state.modePresets, [state.operationMode]: defaults },
+                    assignments: state.assignments.map(assignment => {
+                        const preset = defaults[assignment.type];
+                        if (!preset) return assignment;
+                        return { ...assignment, startTime: preset.startTime, endTime: preset.endTime };
+                    }),
+                    employees: state.operationMode === 'DEPO'
+                        ? state.employees.map(employee => ({
+                            ...employee,
+                            targetHours: getDepotTarget(employee.depotShiftType ?? 'GUNDUZ')
+                        }))
+                        : state.employees
+                };
+            }), 
 
             updateAssignment: (id, type, startTime, endTime, isLocked) => set((state) => {
                 const existingIndex = state.assignments.findIndex(a => a.id === id);
-                let newAssignments = [...state.assignments];
+                const newAssignments = [...state.assignments];
                 
                 if (existingIndex >= 0) {
                     newAssignments[existingIndex] = { ...newAssignments[existingIndex], type: type as any, startTime, endTime, isLocked };
                 } else {
-                    // KUSURSUZ MİMARİ DEVRİM: split('-') hatası yok edildi!
-                    // UUID içindeki tirelere dokunmamak için sadece en sondaki tireyi (Günü ayıran) buluyoruz.
                     const lastDash = id.lastIndexOf('-');
                     const employeeId = id.substring(0, lastDash);
                     const day = id.substring(lastDash + 1);
-                    
                     newAssignments.push({ id, employeeId, day, type: type as any, startTime, endTime, isLocked });
                 }
                 return { assignments: newAssignments, currentState: 'ELLE_DIZILIYOR' };
@@ -74,13 +190,42 @@ export const useAppStore = create<StoreState>()(
         { 
             name: 'chronoshift-v2-storage', 
             storage: createJSONStorage(() => localStorage), 
-            version: 7, // Parçalanmış ID'leri temizlemek için versiyonu yükselttik
+            version: 10,
             migrate: (persistedState: any, version: number) => {
-                if (version < 7) {
-                    console.warn(`[ChronoShift]: Parçalanmış UUID tespiti. Veritabanı v7'ye temizleniyor...`);
-                    return undefined as any; 
-                }
-                return persistedState as StoreState;
+                if (!persistedState || version < 7) return undefined as any;
+
+                const operationMode = (persistedState.operationMode || 'MAGAZA') as OperationMode;
+                const savedModePresets = persistedState.modePresets || {};
+                const modePresets = version < 10
+                    ? {
+                        MAGAZA: { ...MAGAZA_PRESETS, ...(savedModePresets.MAGAZA || {}) },
+                        DEPO: DEPO_PRESETS
+                    }
+                    : {
+                        ...DEFAULT_PRESETS_BY_MODE,
+                        ...savedModePresets
+                    };
+
+                const baseState = version < 8
+                    ? {
+                        ...persistedState,
+                        operationMode: 'MAGAZA' as OperationMode,
+                        modePresets,
+                        presets: persistedState.presets || MAGAZA_PRESETS
+                    }
+                    : {
+                        ...persistedState,
+                        operationMode,
+                        modePresets,
+                        presets: version < 10 && operationMode === 'DEPO'
+                            ? DEPO_PRESETS
+                            : persistedState.presets || modePresets[operationMode]
+                    };
+
+                return {
+                    ...baseState,
+                    employees: normalizeEmployees(baseState.employees || [], baseState.operationMode, baseState.useGlobalTargetHours ?? true)
+                } as StoreState;
             }
         }
     )
