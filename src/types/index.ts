@@ -33,3 +33,12 @@ export type ShiftPreset = {
 };
 
 export type AppState = 'BOS' | 'ELLE_DIZILIYOR' | 'OTO_DIZILDI';
+
+export type MagazaRuleSettings = {
+    weeklyIzinTarget: number;
+    weeklyFullTarget: number;
+    weeklySabahTarget: number;
+    maxSabahPerEmployee: number;
+    requiredOpeners: number;
+    minClosers: number;
+};

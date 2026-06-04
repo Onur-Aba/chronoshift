@@ -1,12 +1,21 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Employee, Assignment, ShiftPreset, AppState, OperationMode, DepotShiftType } from '@/types';
+import { Employee, Assignment, ShiftPreset, AppState, OperationMode, DepotShiftType, MagazaRuleSettings } from '@/types';
 
 export const MAGAZA_PRESETS: Record<string, ShiftPreset> = {
     SABAH: { type: 'SABAH', startTime: '08:45', endTime: '17:45', label: 'Sabah', color: '#0ea5e9' }, 
     AKSAM: { type: 'AKSAM', startTime: '13:15', endTime: '21:15', label: 'Akşam', color: '#6366f1' }, 
     FULL: { type: 'FULL', startTime: '08:45', endTime: '21:15', label: 'Full', color: '#f59e0b' },   
     IZIN: { type: 'IZIN', startTime: '', endTime: '', label: 'İzin', color: '#71717a' }          
+};
+
+export const DEFAULT_MAGAZA_RULE_SETTINGS: MagazaRuleSettings = {
+    weeklyIzinTarget: 1,
+    weeklyFullTarget: 1,
+    weeklySabahTarget: 2,
+    maxSabahPerEmployee: 2,
+    requiredOpeners: 2,
+    minClosers: 3
 };
 
 export const DEPO_PRESETS: Record<string, ShiftPreset> = {
@@ -28,10 +37,15 @@ interface StoreState {
     modePresets: Record<OperationMode, Record<string, ShiftPreset>>;
     operationMode: OperationMode;
     currentState: AppState;
+    magazaRuleSettings: MagazaRuleSettings;
+    closedDays: string[];
     
     globalTargetHours: number;
     useGlobalTargetHours: boolean;
     setGlobalTargetSettings: (useGlobal: boolean, hours: number) => void;
+    updateMagazaRuleSettings: (settings: Partial<MagazaRuleSettings>) => void;
+    resetMagazaRuleSettings: () => void;
+    toggleClosedDay: (day: string) => void;
     setOperationMode: (mode: OperationMode) => void;
     
     addEmployee: (name: string, targetHours?: number, depotShiftType?: DepotShiftType) => void;
@@ -80,10 +94,33 @@ export const useAppStore = create<StoreState>()(
             modePresets: DEFAULT_PRESETS_BY_MODE,
             presets: MAGAZA_PRESETS,
             currentState: 'BOS',
+            magazaRuleSettings: DEFAULT_MAGAZA_RULE_SETTINGS,
+            closedDays: [],
             globalTargetHours: 45,
             useGlobalTargetHours: true,
 
             setGlobalTargetSettings: (useGlobal, hours) => set({ useGlobalTargetHours: useGlobal, globalTargetHours: hours }),
+            updateMagazaRuleSettings: (settings) => set((state) => ({
+                magazaRuleSettings: { ...state.magazaRuleSettings, ...settings }
+            })),
+            resetMagazaRuleSettings: () => set({ magazaRuleSettings: DEFAULT_MAGAZA_RULE_SETTINGS }),
+            toggleClosedDay: (day) => set((state) => {
+                const willClose = !state.closedDays.includes(day);
+                const closedDays = willClose
+                    ? [...state.closedDays, day]
+                    : state.closedDays.filter(closedDay => closedDay !== day);
+
+                return {
+                    closedDays,
+                    assignments: willClose
+                        ? state.assignments.map(assignment => assignment.day === day
+                            ? { ...assignment, type: 'BOS' as const, startTime: '', endTime: '', isLocked: false }
+                            : assignment
+                        )
+                        : state.assignments,
+                    currentState: 'ELLE_DIZILIYOR'
+                };
+            }),
 
             setOperationMode: (mode) => set((state) => {
                 const nextPresets = state.modePresets?.[mode] || DEFAULT_PRESETS_BY_MODE[mode];
@@ -190,7 +227,7 @@ export const useAppStore = create<StoreState>()(
         { 
             name: 'chronoshift-v2-storage', 
             storage: createJSONStorage(() => localStorage), 
-            version: 10,
+            version: 12,
             migrate: (persistedState: any, version: number) => {
                 if (!persistedState || version < 7) return undefined as any;
 
@@ -222,8 +259,19 @@ export const useAppStore = create<StoreState>()(
                             : persistedState.presets || modePresets[operationMode]
                     };
 
-                return {
+	                const savedRules = persistedState.magazaRuleSettings || {};
+
+	                return {
                     ...baseState,
+                    magazaRuleSettings: {
+	                        weeklyIzinTarget: savedRules.weeklyIzinTarget ?? DEFAULT_MAGAZA_RULE_SETTINGS.weeklyIzinTarget,
+	                        weeklyFullTarget: savedRules.weeklyFullTarget ?? DEFAULT_MAGAZA_RULE_SETTINGS.weeklyFullTarget,
+	                        weeklySabahTarget: savedRules.weeklySabahTarget ?? DEFAULT_MAGAZA_RULE_SETTINGS.weeklySabahTarget,
+	                        maxSabahPerEmployee: savedRules.maxSabahPerEmployee ?? DEFAULT_MAGAZA_RULE_SETTINGS.maxSabahPerEmployee,
+	                        requiredOpeners: savedRules.requiredOpeners ?? DEFAULT_MAGAZA_RULE_SETTINGS.requiredOpeners,
+	                        minClosers: savedRules.minClosers ?? DEFAULT_MAGAZA_RULE_SETTINGS.minClosers
+                    },
+	                    closedDays: Array.isArray(persistedState.closedDays) ? persistedState.closedDays : [],
                     employees: normalizeEmployees(baseState.employees || [], baseState.operationMode, baseState.useGlobalTargetHours ?? true)
                 } as StoreState;
             }

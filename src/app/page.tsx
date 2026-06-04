@@ -54,7 +54,9 @@ export default function Home() {
             presets,
             globalTargetHours,
             useGlobalTargetHours,
-            operationMode
+            operationMode,
+            magazaRuleSettings,
+            closedDays
         } = useAppStore.getState();
 
         if (employees.length === 0) {
@@ -63,7 +65,7 @@ export default function Home() {
         }
 
         setIsOptimizing(true);
-        workerRef.current?.postMessage({ employees, assignments, presets, days: DAYS, globalTargetHours, useGlobalTargetHours, operationMode });
+        workerRef.current?.postMessage({ employees, assignments, presets, days: DAYS, globalTargetHours, useGlobalTargetHours, operationMode, magazaRuleSettings, closedDays });
     };
 
     const handleDragStart = (event: DragStartEvent) => {
@@ -79,6 +81,10 @@ export default function Home() {
         const cellId = over.id.toString();
         const preset = active.data.current?.preset as ShiftPreset;
         if (!preset) return;
+
+        const lastDash = cellId.lastIndexOf('-');
+        const day = cellId.substring(lastDash + 1);
+        if (useAppStore.getState().closedDays.includes(day)) return;
 
         if (currentState === 'OTO_DIZILDI') {
             setPendingAction({ cellId, preset });

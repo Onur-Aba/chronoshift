@@ -2,8 +2,8 @@
 
 import { useAppStore } from "@/store/useAppStore";
 import { useDroppable } from "@dnd-kit/core";
-import { Pin, Trash2, UserX, Clock3, Warehouse } from "lucide-react";
-import { DepotShiftType } from "@/types";
+import { Pin, Trash2, UserX, Clock3, Warehouse, SlidersHorizontal, RotateCcw } from "lucide-react";
+import { DepotShiftType, MagazaRuleSettings } from "@/types";
 
 const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
@@ -22,15 +22,90 @@ const getNetHours = (s: string, e: string, breakMinutes = 0) => {
 
 const formatHours = (hours: number) => Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
 
-const AssignmentCell = ({ employeeId, day }: { employeeId: string, day: string }) => {
+const numberInputClass = "w-full bg-background/80 border border-border/60 rounded-xl px-3 py-2 text-sm font-black outline-none focus:ring-2 focus:ring-primary/30 text-foreground shadow-inner";
+
+const RuleNumberInput = ({ label, value, onChange, suffix }: { label: string; value: number; onChange: (value: number) => void; suffix?: string }) => (
+    <label className="flex flex-col gap-1.5 min-w-0">
+        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground truncate">{label}</span>
+        <div className="relative">
+            <input
+                type="number"
+                min="0"
+                step="1"
+                value={value}
+                onChange={(event) => onChange(Math.max(0, Math.round(Number(event.target.value) || 0)))}
+                className={`${numberInputClass} ${suffix ? 'pr-12' : ''}`}
+            />
+            {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-muted-foreground">{suffix}</span>}
+        </div>
+    </label>
+);
+
+const MagazaRulePanel = ({
+    settings,
+    updateSettings,
+    resetSettings
+}: {
+    settings: MagazaRuleSettings;
+    updateSettings: (settings: Partial<MagazaRuleSettings>) => void;
+    resetSettings: () => void;
+}) => (
+    <div className="mb-3 rounded-2xl border border-primary/15 bg-primary/[0.03] px-3 py-3 shadow-sm flex-shrink-0">
+        <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <SlidersHorizontal size={16} />
+                </div>
+                <div className="min-w-0">
+                    <div className="text-[11px] font-black uppercase tracking-[0.18em] text-primary truncate">Mağaza kuralları</div>
+                    <p className="text-[11px] font-bold text-muted-foreground truncate">Otomatik Diz bu değerleri kullanır.</p>
+                </div>
+            </div>
+            <button
+                type="button"
+                onClick={resetSettings}
+                className="flex-shrink-0 text-[10px] flex items-center gap-1.5 font-black text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-2 rounded-full transition-all border border-amber-500/10"
+            >
+                <RotateCcw size={12} /> Varsayılan
+            </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5">
+            <RuleNumberInput label="Haftalık sabah" value={settings.weeklySabahTarget} suffix="gün" onChange={(value) => updateSettings({ weeklySabahTarget: value })} />
+            <RuleNumberInput label="Haftalık full" value={settings.weeklyFullTarget} suffix="gün" onChange={(value) => updateSettings({ weeklyFullTarget: value })} />
+            <RuleNumberInput label="Açılış kişi" value={settings.requiredOpeners} suffix="kişi" onChange={(value) => updateSettings({ requiredOpeners: value })} />
+            <RuleNumberInput label="Kapanış min." value={settings.minClosers} suffix="kişi" onChange={(value) => updateSettings({ minClosers: value })} />
+            <RuleNumberInput label="Açılış limiti" value={settings.maxSabahPerEmployee} suffix="gün" onChange={(value) => updateSettings({ maxSabahPerEmployee: value })} />
+        </div>
+    </div>
+);
+
+const DayHeaderCell = ({ day, isClosed, onToggle }: { day: string; isClosed: boolean; onToggle: () => void }) => (
+    <div className="p-2 lg:p-3 font-black text-[10px] lg:text-xs uppercase tracking-widest text-center text-foreground flex flex-col items-center justify-center gap-2">
+        <span>{day}</span>
+        <button
+            type="button"
+            onClick={onToggle}
+            aria-pressed={isClosed}
+            className={`group inline-flex items-center gap-1.5 rounded-full border px-2 py-1 transition-all ${isClosed ? 'border-red-500/25 bg-red-500/10 text-red-600' : 'border-border/70 bg-background/70 text-muted-foreground hover:text-foreground'}`}
+        >
+            <span className={`relative h-3.5 w-7 rounded-full transition-all ${isClosed ? 'bg-red-500/70' : 'bg-muted-foreground/25'}`}>
+                <span className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-background shadow-sm transition-transform ${isClosed ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            </span>
+            <span className="text-[9px] font-black uppercase tracking-wider">{isClosed ? 'Kapalı' : 'Açık'}</span>
+        </button>
+    </div>
+);
+
+const AssignmentCell = ({ employeeId, day, isDayClosed }: { employeeId: string, day: string, isDayClosed: boolean }) => {
     const id = `${employeeId}-${day}`;
-    const { isOver, setNodeRef } = useDroppable({ id, data: { type: "Cell", id } });
+    const { isOver, setNodeRef } = useDroppable({ id, data: { type: "Cell", id }, disabled: isDayClosed });
     const { assignments, updateAssignment, presets, operationMode } = useAppStore(); 
     const assign = assignments.find(a => a.id === id);
     const isBos = !assign || assign.type === 'BOS';
 
-    const presetColor = !isBos && assign ? presets[assign.type]?.color || '#94a3b8' : '#94a3b8';
-    const customStyle = !isBos && assign ? {
+    const presetColor = !isBos && assign && !isDayClosed ? presets[assign.type]?.color || '#94a3b8' : '#94a3b8';
+    const customStyle = !isBos && assign && !isDayClosed ? {
         backgroundColor: `${presetColor}14`,
         borderColor: `${presetColor}55`,
         color: presetColor,
@@ -45,27 +120,33 @@ const AssignmentCell = ({ employeeId, day }: { employeeId: string, day: string }
             ref={setNodeRef} 
             style={customStyle}
             className={`relative flex flex-col items-center justify-center p-2 min-h-[78px] border rounded-2xl transition-all duration-200 ease-out
-                ${isBos ? 'bg-background/45 border-border/50 border-dashed text-muted-foreground shadow-inner hover:bg-background/80' : 'shadow-sm hover:shadow-md hover:scale-[1.01]'} 
-                ${isOver ? 'ring-2 ring-primary bg-primary/5 scale-[1.03] shadow-xl z-10' : ''}`}
+                ${isDayClosed ? 'bg-red-500/10 border-red-500/20 text-red-600 shadow-inner' : isBos ? 'bg-background/45 border-border/50 border-dashed text-muted-foreground shadow-inner hover:bg-background/80' : 'shadow-sm hover:shadow-md hover:scale-[1.01]'} 
+                ${isOver && !isDayClosed ? 'ring-2 ring-primary bg-primary/5 scale-[1.03] shadow-xl z-10' : ''}`}
         >
-            {assign?.isLocked && <Pin size={12} className="absolute top-2 right-2 opacity-45" />}
-            {!isBos && assign ? (
-                isRest ? (
-                    <span className="font-black text-2xl opacity-40 tracking-widest">X</span>
-                ) : (
-                    <div className="flex flex-col gap-1.5 items-center z-10 w-full px-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-foreground/80">{presets[assign.type]?.label || assign.type}</span>
-                        <div className="bg-background/85 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
-                            <input type="time" value={assign.startTime} onChange={(e) => updateAssignment(id, assign.type, e.target.value, assign.endTime, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer text-foreground" />
-                        </div>
-                        <div className="bg-background/85 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
-                            <input type="time" value={assign.endTime} onChange={(e) => updateAssignment(id, assign.type, assign.startTime, e.target.value, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer text-foreground" />
-                        </div>
-                        {isDepot && (presets[assign.type]?.breakMinutes || 0) > 0 && <span className="text-[9px] font-bold text-muted-foreground">1 sa. mola</span>}
-                        {assign.type === 'ARACI' && <span className="text-[9px] font-bold text-muted-foreground">manuel</span>}
-                    </div>
-                )
-            ) : <span className="text-[10px] font-semibold tracking-widest uppercase opacity-35">BOŞ</span>}
+            {isDayClosed ? (
+                <span className="font-black text-sm lg:text-base uppercase tracking-[0.22em] opacity-80">Kapalı</span>
+            ) : (
+                <>
+                    {assign?.isLocked && <Pin size={12} className="absolute top-2 right-2 opacity-45" />}
+                    {!isBos && assign ? (
+                        isRest ? (
+                            <span className="font-black text-2xl opacity-40 tracking-widest">X</span>
+                        ) : (
+                            <div className="flex flex-col gap-1.5 items-center z-10 w-full px-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-foreground/80">{presets[assign.type]?.label || assign.type}</span>
+                                <div className="bg-background/85 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
+                                    <input type="time" value={assign.startTime} onChange={(e) => updateAssignment(id, assign.type, e.target.value, assign.endTime, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer text-foreground" />
+                                </div>
+                                <div className="bg-background/85 px-1.5 py-0.5 rounded-md border border-border/50 shadow-inner w-full flex justify-center">
+                                    <input type="time" value={assign.endTime} onChange={(e) => updateAssignment(id, assign.type, assign.startTime, e.target.value, true)} className="bg-transparent outline-none text-center text-[11px] font-bold font-mono w-full cursor-pointer text-foreground" />
+                                </div>
+                                {isDepot && (presets[assign.type]?.breakMinutes || 0) > 0 && <span className="text-[9px] font-bold text-muted-foreground">1 sa. mola</span>}
+                                {assign.type === 'ARACI' && <span className="text-[9px] font-bold text-muted-foreground">manuel</span>}
+                            </div>
+                        )
+                    ) : <span className="text-[10px] font-semibold tracking-widest uppercase opacity-35">BOŞ</span>}
+                </>
+            )}
         </div>
     );
 };
@@ -81,13 +162,18 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
         updateEmployeeDepotShiftType,
         removeEmployee,
         operationMode,
-        presets
+        presets,
+        magazaRuleSettings,
+        updateMagazaRuleSettings,
+        resetMagazaRuleSettings,
+        closedDays,
+        toggleClosedDay
     } = useAppStore();
     const isDepot = operationMode === 'DEPO';
 
     return (
         <div className="flex-1 my-4 mx-4 lg:ml-4 lg:mr-2 p-4 lg:p-6 flex flex-col bg-card/95 backdrop-blur-xl border border-border/70 rounded-[2rem] shadow-2xl overflow-hidden relative transition-all duration-500 ease-in-out">
-            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-5 flex-shrink-0">
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-4 flex-shrink-0">
                 <div>
                     <div className="flex items-center gap-2 mb-2">
                         {isDepot ? <Warehouse size={18} className="text-primary" /> : <Clock3 size={18} className="text-primary" />}
@@ -109,7 +195,7 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
             </div>
 
             {isDepot && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 flex-shrink-0">
                     <div className="rounded-2xl border border-border/60 bg-background/50 p-4">
                         <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-1">Gündüz Planı</div>
                         <div className="text-sm font-bold text-foreground">12:30 - 22:30 · 10 saat · 1 saat mola · 50 sa./hafta</div>
@@ -125,17 +211,32 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
                 </div>
             )}
 
+            {!isDepot && (
+                <MagazaRulePanel
+                    settings={magazaRuleSettings}
+                    updateSettings={updateMagazaRuleSettings}
+                    resetSettings={resetMagazaRuleSettings}
+                />
+            )}
+
             <div className="flex-1 bg-background/45 backdrop-blur-sm border border-border/60 rounded-2xl shadow-inner flex flex-col min-h-0 overflow-hidden relative">
                 <div className="flex-1 overflow-x-auto overflow-y-hidden flex flex-col w-full custom-scrollbar">
                     <div className="min-w-[900px] lg:min-w-0 flex flex-col flex-1">
                         <div className="grid grid-cols-[160px_repeat(7,1fr)] lg:grid-cols-[220px_repeat(7,1fr)] border-b border-border/60 bg-card/60 flex-shrink-0">
                             <div className="p-3 lg:p-4 font-black text-[10px] lg:text-xs uppercase tracking-widest text-muted-foreground flex items-center">Personel & Kota</div>
-                            {DAYS.map(day => <div key={day} className="p-3 lg:p-4 font-black text-[10px] lg:text-xs uppercase tracking-widest text-center text-foreground">{day}</div>)}
+                            {DAYS.map(day => (
+                                <DayHeaderCell
+                                    key={day}
+                                    day={day}
+                                    isClosed={closedDays.includes(day)}
+                                    onToggle={() => toggleClosedDay(day)}
+                                />
+                            ))}
                         </div>
                         <div className="flex-1 overflow-y-auto custom-scrollbar pb-10">
                             {employees.map(emp => {
                                 let assignedHours = 0;
-                                assignments.filter(a => a.employeeId === emp.id && a.type !== 'IZIN' && a.type !== 'BOS').forEach(a => {
+                                assignments.filter(a => a.employeeId === emp.id && !closedDays.includes(a.day) && a.type !== 'IZIN' && a.type !== 'BOS').forEach(a => {
                                     const preset = presets[a.type];
                                     if (isDepot && typeof preset?.plannedHours === 'number') {
                                         assignedHours += preset.plannedHours;
@@ -170,7 +271,11 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
                                                 <input type="number" step="0.5" value={emp.targetHours} onChange={(e) => updateEmployeeTargetHours(emp.id, Number(e.target.value))} className="mt-2 w-20 bg-background/70 border border-border/50 rounded-lg px-2 py-1 text-[11px] font-bold outline-none focus:ring-2 focus:ring-primary/30" />
                                             )}
                                         </div>
-                                        {DAYS.map(day => <div key={day} className="p-1.5 lg:p-2 border-r border-border/20 last:border-r-0"><AssignmentCell employeeId={emp.id} day={day} /></div>)}
+                                        {DAYS.map(day => (
+                                            <div key={day} className="p-1.5 lg:p-2 border-r border-border/20 last:border-r-0">
+                                                <AssignmentCell employeeId={emp.id} day={day} isDayClosed={closedDays.includes(day)} />
+                                            </div>
+                                        ))}
                                     </div>
                                 );
                             })}
