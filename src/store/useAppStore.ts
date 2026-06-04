@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Employee, Assignment, ShiftPreset, AppState, OperationMode, DepotShiftType, MagazaRuleSettings } from '@/types';
+import { Employee, Assignment, ShiftPreset, AppState, OperationMode, DepotShiftType, MagazaRuleSettings, DepotRuleSettings } from '@/types';
 
 export const MAGAZA_PRESETS: Record<string, ShiftPreset> = {
     SABAH: { type: 'SABAH', startTime: '08:45', endTime: '17:45', label: 'Sabah', color: '#0ea5e9' }, 
@@ -16,6 +16,10 @@ export const DEFAULT_MAGAZA_RULE_SETTINGS: MagazaRuleSettings = {
     maxSabahPerEmployee: 2,
     requiredOpeners: 2,
     minClosers: 3
+};
+
+export const DEFAULT_DEPOT_RULE_SETTINGS: DepotRuleSettings = {
+    consecutiveRestDays: false
 };
 
 export const DEPO_PRESETS: Record<string, ShiftPreset> = {
@@ -38,6 +42,7 @@ interface StoreState {
     operationMode: OperationMode;
     currentState: AppState;
     magazaRuleSettings: MagazaRuleSettings;
+    depotRuleSettings: DepotRuleSettings;
     closedDays: string[];
     
     globalTargetHours: number;
@@ -45,6 +50,8 @@ interface StoreState {
     setGlobalTargetSettings: (useGlobal: boolean, hours: number) => void;
     updateMagazaRuleSettings: (settings: Partial<MagazaRuleSettings>) => void;
     resetMagazaRuleSettings: () => void;
+    updateDepotRuleSettings: (settings: Partial<DepotRuleSettings>) => void;
+    resetDepotRuleSettings: () => void;
     toggleClosedDay: (day: string) => void;
     setOperationMode: (mode: OperationMode) => void;
     
@@ -95,6 +102,7 @@ export const useAppStore = create<StoreState>()(
             presets: MAGAZA_PRESETS,
             currentState: 'BOS',
             magazaRuleSettings: DEFAULT_MAGAZA_RULE_SETTINGS,
+            depotRuleSettings: DEFAULT_DEPOT_RULE_SETTINGS,
             closedDays: [],
             globalTargetHours: 45,
             useGlobalTargetHours: true,
@@ -104,6 +112,10 @@ export const useAppStore = create<StoreState>()(
                 magazaRuleSettings: { ...state.magazaRuleSettings, ...settings }
             })),
             resetMagazaRuleSettings: () => set({ magazaRuleSettings: DEFAULT_MAGAZA_RULE_SETTINGS }),
+            updateDepotRuleSettings: (settings) => set((state) => ({
+                depotRuleSettings: { ...state.depotRuleSettings, ...settings }
+            })),
+            resetDepotRuleSettings: () => set({ depotRuleSettings: DEFAULT_DEPOT_RULE_SETTINGS }),
             toggleClosedDay: (day) => set((state) => {
                 const willClose = !state.closedDays.includes(day);
                 const closedDays = willClose
@@ -227,7 +239,7 @@ export const useAppStore = create<StoreState>()(
         { 
             name: 'chronoshift-v2-storage', 
             storage: createJSONStorage(() => localStorage), 
-            version: 12,
+            version: 13,
             migrate: (persistedState: any, version: number) => {
                 if (!persistedState || version < 7) return undefined as any;
 
@@ -260,6 +272,7 @@ export const useAppStore = create<StoreState>()(
                     };
 
 	                const savedRules = persistedState.magazaRuleSettings || {};
+	                const savedDepotRules = persistedState.depotRuleSettings || {};
 
 	                return {
                     ...baseState,
@@ -270,6 +283,9 @@ export const useAppStore = create<StoreState>()(
 	                        maxSabahPerEmployee: savedRules.maxSabahPerEmployee ?? DEFAULT_MAGAZA_RULE_SETTINGS.maxSabahPerEmployee,
 	                        requiredOpeners: savedRules.requiredOpeners ?? DEFAULT_MAGAZA_RULE_SETTINGS.requiredOpeners,
 	                        minClosers: savedRules.minClosers ?? DEFAULT_MAGAZA_RULE_SETTINGS.minClosers
+                    },
+                    depotRuleSettings: {
+                        consecutiveRestDays: savedDepotRules.consecutiveRestDays ?? DEFAULT_DEPOT_RULE_SETTINGS.consecutiveRestDays
                     },
 	                    closedDays: Array.isArray(persistedState.closedDays) ? persistedState.closedDays : [],
                     employees: normalizeEmployees(baseState.employees || [], baseState.operationMode, baseState.useGlobalTargetHours ?? true)

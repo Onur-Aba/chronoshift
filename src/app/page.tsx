@@ -25,6 +25,7 @@ export default function Home() {
     const [activePreset, setActivePreset] = useState<ShiftPreset | null>(null);
     const [alertMessage, setAlertMessage] = useState<string | null>(null);
     const workerRef = useRef<Worker | null>(null);
+    const optimizationRunCounterRef = useRef(0);
     const [isMounted, setIsMounted] = useState(false);
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -56,6 +57,7 @@ export default function Home() {
             useGlobalTargetHours,
             operationMode,
             magazaRuleSettings,
+            depotRuleSettings,
             closedDays
         } = useAppStore.getState();
 
@@ -64,8 +66,10 @@ export default function Home() {
             return;
         }
 
+        const optimizationRunId = `${Date.now()}-${optimizationRunCounterRef.current++}`;
+
         setIsOptimizing(true);
-        workerRef.current?.postMessage({ employees, assignments, presets, days: DAYS, globalTargetHours, useGlobalTargetHours, operationMode, magazaRuleSettings, closedDays });
+        workerRef.current?.postMessage({ employees, assignments, presets, days: DAYS, globalTargetHours, useGlobalTargetHours, operationMode, magazaRuleSettings, depotRuleSettings, closedDays, optimizationRunId });
     };
 
     const handleDragStart = (event: DragStartEvent) => {
@@ -155,7 +159,7 @@ export default function Home() {
                     </motion.div>
                 </AuroraBackground>
 
-                <main id="workspace" className="min-h-[calc(100vh-80px)] lg:h-[calc(100vh-80px)] w-full flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative z-10 border-t border-border/50 bg-background/50 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.05)] dark:shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.2)]">
+                <main id="workspace" className="min-h-[calc(100vh-64px)] lg:min-h-[calc(100vh+140px)] lg:h-[calc(100vh+140px)] w-full flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative z-10 border-t border-border/50 bg-background/50 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.05)] dark:shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.2)]">
                     <CalendarBoard onOptimize={runOptimization} isOptimizing={isOptimizing} />
                     <Sidebar />
                 </main>

@@ -91,8 +91,8 @@ export const Sidebar = () => {
     };
 
     return (
-        <aside className="w-auto lg:w-[390px] h-[540px] lg:h-[calc(100%-2rem)] mx-4 lg:ml-0 my-4 lg:mr-4 flex-shrink-0 bg-card/95 backdrop-blur-xl border border-border/70 rounded-[2rem] shadow-2xl p-4 lg:p-6 flex flex-col z-20 overflow-hidden relative transition-all duration-500">            
-            <div className="mb-7 pb-6 border-b border-border/50">
+        <aside className="w-auto lg:w-[390px] h-[820px] lg:h-[calc(100%-1.5rem)] min-h-0 mx-4 lg:ml-0 my-3 lg:mr-4 flex-shrink-0 bg-card/95 backdrop-blur-xl border border-border/70 rounded-[2rem] shadow-2xl p-4 lg:p-6 flex flex-col z-20 overflow-y-auto custom-scrollbar relative transition-all duration-500">            
+            <div className="mb-7 pb-6 border-b border-border/50 flex-shrink-0">
                 <div className="flex items-center justify-between gap-2 mb-4 text-foreground">
                     <div className="flex items-center gap-2">
                         <Users size={18} className="text-primary" />

@@ -3,7 +3,7 @@
 import { useAppStore } from "@/store/useAppStore";
 import { useDroppable } from "@dnd-kit/core";
 import { Pin, Trash2, UserX, Clock3, Warehouse, SlidersHorizontal, RotateCcw } from "lucide-react";
-import { DepotShiftType, MagazaRuleSettings } from "@/types";
+import { DepotRuleSettings, DepotShiftType, MagazaRuleSettings } from "@/types";
 
 const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
@@ -76,6 +76,57 @@ const MagazaRulePanel = ({
             <RuleNumberInput label="Açılış kişi" value={settings.requiredOpeners} suffix="kişi" onChange={(value) => updateSettings({ requiredOpeners: value })} />
             <RuleNumberInput label="Kapanış min." value={settings.minClosers} suffix="kişi" onChange={(value) => updateSettings({ minClosers: value })} />
             <RuleNumberInput label="Açılış limiti" value={settings.maxSabahPerEmployee} suffix="gün" onChange={(value) => updateSettings({ maxSabahPerEmployee: value })} />
+        </div>
+    </div>
+);
+
+const ToggleSwitch = ({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) => (
+    <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        aria-pressed={checked}
+        aria-label={checked ? 'İzinleri arka arkaya koymayı kapat' : 'İzinleri arka arkaya koymayı aç'}
+        className={`relative h-7 w-12 flex-shrink-0 overflow-hidden rounded-full transition-all ${checked ? 'bg-primary shadow-sm shadow-primary/25' : 'bg-muted-foreground/25'}`}
+    >
+        <span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-background shadow-md transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+    </button>
+);
+
+const DepotRulePanel = ({
+    settings,
+    updateSettings,
+    resetSettings
+}: {
+    settings: DepotRuleSettings;
+    updateSettings: (settings: Partial<DepotRuleSettings>) => void;
+    resetSettings: () => void;
+}) => (
+    <div className="mb-3 rounded-2xl border border-primary/15 bg-primary/[0.03] px-3 py-3 shadow-sm flex-shrink-0">
+        <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <SlidersHorizontal size={16} />
+                </div>
+                <div className="min-w-0">
+                    <div className="text-[11px] font-black uppercase tracking-[0.18em] text-primary truncate">Depo ayarları</div>
+                    <p className="text-[11px] font-bold text-muted-foreground truncate">Otomatik Diz depo kuralları.</p>
+                </div>
+            </div>
+            <button
+                type="button"
+                onClick={resetSettings}
+                className="flex-shrink-0 text-[10px] flex items-center gap-1.5 font-black text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-2 rounded-full transition-all border border-amber-500/10"
+            >
+                <RotateCcw size={12} /> Varsayılan
+            </button>
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-border/60 bg-background/60 p-3 flex items-center justify-between gap-4 overflow-hidden">
+            <div className="min-w-0 pr-2">
+                <div className="text-xs font-black uppercase tracking-widest text-foreground">İzinleri arka arkaya koy</div>
+                <p className="mt-1 text-[11px] font-bold text-muted-foreground">Açıkken depo otomatik diziminde 2 izin günü yan yana planlanır.</p>
+            </div>
+            <ToggleSwitch checked={settings.consecutiveRestDays} onChange={(checked) => updateSettings({ consecutiveRestDays: checked })} />
         </div>
     </div>
 );
@@ -166,13 +217,16 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
         magazaRuleSettings,
         updateMagazaRuleSettings,
         resetMagazaRuleSettings,
+        depotRuleSettings,
+        updateDepotRuleSettings,
+        resetDepotRuleSettings,
         closedDays,
         toggleClosedDay
     } = useAppStore();
     const isDepot = operationMode === 'DEPO';
 
     return (
-        <div className="flex-1 my-4 mx-4 lg:ml-4 lg:mr-2 p-4 lg:p-6 flex flex-col bg-card/95 backdrop-blur-xl border border-border/70 rounded-[2rem] shadow-2xl overflow-hidden relative transition-all duration-500 ease-in-out">
+        <div className="flex-1 min-h-[820px] lg:min-h-0 my-3 mx-4 lg:ml-4 lg:mr-2 p-4 lg:p-5 flex flex-col bg-card/95 backdrop-blur-xl border border-border/70 rounded-[2rem] shadow-2xl overflow-hidden relative transition-all duration-500 ease-in-out">
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-4 flex-shrink-0">
                 <div>
                     <div className="flex items-center gap-2 mb-2">
@@ -195,7 +249,7 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
             </div>
 
             {isDepot && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 flex-shrink-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3 flex-shrink-0">
                     <div className="rounded-2xl border border-border/60 bg-background/50 p-4">
                         <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-1">Gündüz Planı</div>
                         <div className="text-sm font-bold text-foreground">12:30 - 22:30 · 10 saat · 1 saat mola · 50 sa./hafta</div>
@@ -211,6 +265,14 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
                 </div>
             )}
 
+            {isDepot && (
+                <DepotRulePanel
+                    settings={depotRuleSettings}
+                    updateSettings={updateDepotRuleSettings}
+                    resetSettings={resetDepotRuleSettings}
+                />
+            )}
+
             {!isDepot && (
                 <MagazaRulePanel
                     settings={magazaRuleSettings}
@@ -219,9 +281,9 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
                 />
             )}
 
-            <div className="flex-1 bg-background/45 backdrop-blur-sm border border-border/60 rounded-2xl shadow-inner flex flex-col min-h-0 overflow-hidden relative">
-                <div className="flex-1 overflow-x-auto overflow-y-hidden flex flex-col w-full custom-scrollbar">
-                    <div className="min-w-[900px] lg:min-w-0 flex flex-col flex-1">
+            <div className="flex-1 bg-background/45 backdrop-blur-sm border border-border/60 rounded-2xl shadow-inner flex flex-col min-h-[560px] lg:min-h-0 overflow-hidden relative">
+                <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex flex-col w-full custom-scrollbar">
+                    <div className="min-w-[900px] lg:min-w-0 min-h-0 flex flex-col flex-1">
                         <div className="grid grid-cols-[160px_repeat(7,1fr)] lg:grid-cols-[220px_repeat(7,1fr)] border-b border-border/60 bg-card/60 flex-shrink-0">
                             <div className="p-3 lg:p-4 font-black text-[10px] lg:text-xs uppercase tracking-widest text-muted-foreground flex items-center">Personel & Kota</div>
                             {DAYS.map(day => (
@@ -233,7 +295,7 @@ export const CalendarBoard = ({ onOptimize, isOptimizing }: { onOptimize: () => 
                                 />
                             ))}
                         </div>
-                        <div className="flex-1 overflow-y-auto custom-scrollbar pb-10">
+                        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pb-10">
                             {employees.map(emp => {
                                 let assignedHours = 0;
                                 assignments.filter(a => a.employeeId === emp.id && !closedDays.includes(a.day) && a.type !== 'IZIN' && a.type !== 'BOS').forEach(a => {

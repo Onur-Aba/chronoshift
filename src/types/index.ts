@@ -42,3 +42,7 @@ export type MagazaRuleSettings = {
     requiredOpeners: number;
     minClosers: number;
 };
+
+export type DepotRuleSettings = {
+    consecutiveRestDays: boolean;
+};
