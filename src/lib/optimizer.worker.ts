@@ -5,6 +5,11 @@ type DepotShiftType = 'GUNDUZ' | 'GECE';
 
 type DepotRuleSettings = {
     consecutiveRestDays: boolean;
+    maxConsecutiveWorkDays: number;
+    requireOffBeforeDayToNight: boolean;
+    balanceWeekends: boolean;
+    balanceDayNight: boolean;
+    avoidSameDayCrowding: boolean;
 };
 
 type MagazaRuleSettings = {
@@ -26,8 +31,15 @@ const DEFAULT_MAGAZA_RULE_SETTINGS: MagazaRuleSettings = {
 };
 
 const DEFAULT_DEPOT_RULE_SETTINGS: DepotRuleSettings = {
-    consecutiveRestDays: false
+    consecutiveRestDays: true,
+    maxConsecutiveWorkDays: 6,
+    requireOffBeforeDayToNight: true,
+    balanceWeekends: true,
+    balanceDayNight: true,
+    avoidSameDayCrowding: true,
 };
+
+const WEEKEND_DAYS = ['Cumartesi', 'Pazar'];
 
 const normalizeNonNegativeInteger = (value: unknown, fallback: number) => {
     const numericValue = Number(value);
@@ -45,7 +57,12 @@ const normalizeMagazaRuleSettings = (settings?: Partial<MagazaRuleSettings>): Ma
 });
 
 const normalizeDepotRuleSettings = (settings?: Partial<DepotRuleSettings>): DepotRuleSettings => ({
-    consecutiveRestDays: settings?.consecutiveRestDays ?? DEFAULT_DEPOT_RULE_SETTINGS.consecutiveRestDays
+    consecutiveRestDays: settings?.consecutiveRestDays ?? DEFAULT_DEPOT_RULE_SETTINGS.consecutiveRestDays,
+    maxConsecutiveWorkDays: normalizeNonNegativeInteger(settings?.maxConsecutiveWorkDays, DEFAULT_DEPOT_RULE_SETTINGS.maxConsecutiveWorkDays),
+    requireOffBeforeDayToNight: settings?.requireOffBeforeDayToNight ?? DEFAULT_DEPOT_RULE_SETTINGS.requireOffBeforeDayToNight,
+    balanceWeekends: settings?.balanceWeekends ?? DEFAULT_DEPOT_RULE_SETTINGS.balanceWeekends,
+    balanceDayNight: settings?.balanceDayNight ?? DEFAULT_DEPOT_RULE_SETTINGS.balanceDayNight,
+    avoidSameDayCrowding: settings?.avoidSameDayCrowding ?? DEFAULT_DEPOT_RULE_SETTINGS.avoidSameDayCrowding,
 });
 
 const normalizeClosedDays = (closedDays: unknown): string[] => Array.isArray(closedDays)
@@ -102,6 +119,71 @@ const clearAssignment = (assignment: any) => {
     assignment.isLocked = false;
 };
 
+const forceDepotTransitionRestDay = (assignments: any[], employeeIds: string[], day: string) => {
+    if (employeeIds.length === 0) return;
+    const forcedIdSet = new Set(employeeIds);
+
+    assignments.forEach((assignment: any) => {
+        if (!forcedIdSet.has(assignment.employeeId) || assignment.day !== day) return;
+        assignment.type = 'IZIN';
+        assignment.startTime = '';
+        assignment.endTime = '';
+        assignment.isLocked = true;
+    });
+};
+
+const normalizePreviousWorkStreakMap = (value: unknown): Record<string, number> => {
+    if (!value || typeof value !== 'object') return {};
+
+    return Object.entries(value as Record<string, unknown>).reduce<Record<string, number>>((acc, [employeeId, rawStreak]) => {
+        const streak = Number(rawStreak);
+        if (Number.isFinite(streak) && streak > 0) acc[employeeId] = Math.floor(streak);
+        return acc;
+    }, {});
+};
+
+const getPreviousWorkStreak = (employee: any, previousWorkStreakByEmployeeId: Record<string, number>) => {
+    const archivedStreak = previousWorkStreakByEmployeeId[employee.id];
+    if (Number.isFinite(archivedStreak) && archivedStreak > 0) return archivedStreak;
+    return employee.previousMonthWorkStreak ?? 0;
+};
+
+const forceDepotMaxConsecutiveRestDays = (
+    assignments: any[],
+    employees: any[],
+    days: string[],
+    closedDaySet: Set<string>,
+    maxConsecutiveWorkDays: number,
+    previousWorkStreakByEmployeeId: Record<string, number>
+) => {
+    if (maxConsecutiveWorkDays <= 0) return;
+
+    employees.forEach((employee: any) => {
+        const previousStreak = getPreviousWorkStreak(employee, previousWorkStreakByEmployeeId);
+        if (!Number.isFinite(previousStreak) || previousStreak <= 0) return;
+
+        const allowedWorkDaysBeforeRest = Math.max(0, maxConsecutiveWorkDays - previousStreak);
+        let openDayCounter = 0;
+
+        for (const day of days) {
+            if (closedDaySet.has(day)) break;
+
+            if (openDayCounter >= allowedWorkDaysBeforeRest) {
+                const assignment = assignments.find((item: any) => item.employeeId === employee.id && item.day === day);
+                if (!assignment) return;
+
+                assignment.type = 'IZIN';
+                assignment.startTime = '';
+                assignment.endTime = '';
+                assignment.isLocked = true;
+                return;
+            }
+
+            openDayCounter++;
+        }
+    });
+};
+
 const isOpeningShift = (type: string) => type === 'SABAH' || type === 'FULL';
 const isClosingShift = (type: string) => type === 'AKSAM' || type === 'FULL';
 const isMagazaWorkType = (type: string) => type === 'SABAH' || type === 'AKSAM' || type === 'FULL';
@@ -147,31 +229,72 @@ const getDepotRestDayRunPenalty = (state: any[], employeeId: string, openDays: s
     return Math.max(0, Math.min(targetRestDays, restDayIndexes.length) - maxRun);
 };
 
-const getCompatibleConsecutiveRestDays = (empAssignments: any[], openDays: string[], targetRestDays: number) => {
-    if (targetRestDays <= 1) return null;
-
-    const assignmentByDay = new Map(empAssignments.map((assignment: any) => [assignment.day, assignment]));
-    const possibleBlocks: string[][] = [];
-
-    for (let startIndex = 0; startIndex <= openDays.length - targetRestDays; startIndex++) {
-        const block = openDays.slice(startIndex, startIndex + targetRestDays);
-        const hasLockedRestOutsideBlock = empAssignments.some((assignment: any) =>
-            assignment.isLocked && assignment.type === 'IZIN' && openDays.includes(assignment.day) && !block.includes(assignment.day)
-        );
-        const hasLockedWorkInsideBlock = block.some(day => {
-            const assignment = assignmentByDay.get(day);
-            return assignment?.isLocked && isDepotWorkType(assignment.type);
-        });
-
-        if (!hasLockedRestOutsideBlock && !hasLockedWorkInsideBlock) possibleBlocks.push(block);
+/** 7-gün kuralı: üst üste çalışma ihlali sayısı */
+const getConsecutiveWorkViolation = (
+    state: any[],
+    employeeId: string,
+    openDays: string[],
+    maxConsecutive: number,
+    previousStreak: number
+): number => {
+    const empMap = new Map(
+        state.filter((a: any) => a.employeeId === employeeId).map((a: any) => [a.day, a])
+    );
+    let violations = 0;
+    let run = previousStreak;
+    for (const day of openDays) {
+        const a = empMap.get(day);
+        if (a && isDepotWorkType(a.type)) {
+            run++;
+            if (run > maxConsecutive) violations++;
+        } else {
+            run = 0;
+        }
     }
+    return violations;
+};
 
-    if (possibleBlocks.length === 0) return null;
-    return possibleBlocks[Math.floor(Math.random() * possibleBlocks.length)];
+/** Gündüzden geceye direkt geçiş ihlal sayısı */
+const getDayToNightViolation = (state: any[], employeeId: string, openDays: string[]): number => {
+    const empMap = new Map(
+        state.filter((a: any) => a.employeeId === employeeId).map((a: any) => [a.day, a])
+    );
+    let violations = 0;
+    for (let i = 1; i < openDays.length; i++) {
+        const prev = empMap.get(openDays[i - 1]);
+        const curr = empMap.get(openDays[i]);
+        if (prev?.type === 'GUNDUZ' && curr?.type === 'GECE') violations++;
+    }
+    return violations;
+};
+
+/** Hafta sonu izin dengesizliği */
+const getWeekendImbalance = (state: any[], employees: any[], openDays: string[]): number => {
+    const weekendDays = openDays.filter(d => WEEKEND_DAYS.includes(d));
+    if (weekendDays.length === 0) return 0;
+    const counts = employees.map((emp: any) =>
+        weekendDays.filter(d => state.find((a: any) => a.employeeId === emp.id && a.day === d && a.type === 'IZIN')).length
+    );
+    const avg = counts.reduce((a: number, b: number) => a + b, 0) / counts.length;
+    return counts.reduce((sum: number, c: number) => sum + Math.abs(c - avg), 0);
+};
+
+/** Yetki kuralı ihlali: yetkililerden en az biri her açık günde çalışmalı */
+const getAuthorizedViolation = (state: any[], authorizedEmployeeIds: string[], openDays: string[]): number => {
+    if (authorizedEmployeeIds.length === 0) return 0;
+    let violations = 0;
+    for (const day of openDays) {
+        const hasAuthorizedWorker = authorizedEmployeeIds.some(empId => {
+            const a = state.find((a: any) => a.employeeId === empId && a.day === day);
+            return a && isDepotWorkType(a.type);
+        });
+        if (!hasAuthorizedWorker) violations++;
+    }
+    return violations;
 };
 
 const getDayCombinations = (days: string[], size: number): string[][] => {
-    if (size <= 0) return [[]];
+    if (size <= 0) return [[]];;
     if (size > days.length) return [];
 
     const results: string[][] = [];
@@ -290,7 +413,14 @@ const getDepotRestBalanceLimits = (employeeCount: number, openDayCount: number) 
 };
 
 self.addEventListener("message", (event: MessageEvent<any>) => {
-    const { employees, assignments, presets, days, operationMode = 'MAGAZA', magazaRuleSettings, depotRuleSettings, closedDays, optimizationRunId = Date.now() } = event.data;
+    const { 
+        employees, assignments, presets, days, 
+        operationMode = 'MAGAZA', magazaRuleSettings, depotRuleSettings, 
+        closedDays,
+        depotTransitionOffEmployeeIds = [],
+        depotPreviousWorkStreakByEmployeeId = {},
+        optimizationRunId = Date.now() 
+    } = event.data;
     const safeAssignments = assignments || [];
     const runSeed = getHashSeed(optimizationRunId, Date.now());
 
@@ -305,6 +435,7 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
     const DAYS = days as string[];
     const closedDaySet = new Set(normalizeClosedDays(closedDays));
     const openDays = DAYS.filter(day => !closedDaySet.has(day));
+    const previousDepotWorkStreakByEmployeeId = normalizePreviousWorkStreakMap(depotPreviousWorkStreakByEmployeeId);
     let currentAssignments = [...safeAssignments];
 
     employees.forEach((emp: any) => {
@@ -324,6 +455,17 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
     });
 
     if (mode === 'DEPO') {
+        const transitionRestDay = DAYS[0];
+        if (!closedDaySet.has(transitionRestDay)) {
+            forceDepotTransitionRestDay(currentAssignments, depotTransitionOffEmployeeIds, transitionRestDay);
+        }
+        forceDepotMaxConsecutiveRestDays(currentAssignments, employees, DAYS, closedDaySet, depotRules.maxConsecutiveWorkDays, previousDepotWorkStreakByEmployeeId);
+
+        // Yetkili personel listesi
+        const authorizedEmployeeIds: string[] = employees
+            .filter((emp: any) => emp.isAuthorized === true)
+            .map((emp: any) => emp.id);
+
         const restLoadByDay = new Map<string, number>(openDays.map(day => [day, 0] as [string, number]));
         currentAssignments.forEach((assignment: any) => {
             if (!closedDaySet.has(assignment.day) && assignment.isLocked && assignment.type === 'IZIN') {
@@ -365,6 +507,7 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
 
         const calculateDepotCost = (state: any[]) => {
             let cost = 0;
+
             employees.forEach((emp: any, employeeIndex: number) => {
                 const preferredType = getEmployeeDepotShiftType(emp, employeeIndex);
                 const empAssigns = state.filter(a => a.employeeId === emp.id && !closedDaySet.has(a.day));
@@ -377,10 +520,37 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
                 if (workAssigns.length !== targetWorkDays) cost += Math.abs(targetWorkDays - workAssigns.length) * 100000;
                 if (restAssigns.length !== targetRestDays) cost += Math.abs(targetRestDays - restAssigns.length) * 100000;
                 if (wrongUnlockedTypeCount > 0) cost += wrongUnlockedTypeCount * 500000;
+
+                // Sert kural: üst üste maks çalışma
+                if (depotRules.maxConsecutiveWorkDays > 0) {
+                    const prevStreak = getPreviousWorkStreak(emp, previousDepotWorkStreakByEmployeeId);
+                    const violations = getConsecutiveWorkViolation(state, emp.id, openDays, depotRules.maxConsecutiveWorkDays, prevStreak);
+                    cost += violations * 9999999; // Çok ağır ceza — sert kural
+                }
+
+                // Sert kural: gündüzden geceye direkt geçiş yasak
+                if (depotRules.requireOffBeforeDayToNight) {
+                    const dtViolations = getDayToNightViolation(state, emp.id, openDays);
+                    cost += dtViolations * 9999999;
+                }
+
+                // Yumuşak kural: gece personeli için peş peşe izin
                 if (depotRules.consecutiveRestDays) {
                     cost += getDepotRestDayRunPenalty(state, emp.id, openDays) * 5000000;
                 }
+
+                // Yumuşak kural: gece/gündüz dengesi
+                if (depotRules.balanceDayNight && isDepotAutoWorkType(preferredType)) {
+                    const wrongType = workAssigns.filter(a => !a.isLocked && isDepotAutoWorkType(a.type) && a.type !== preferredType).length;
+                    cost += wrongType * 200;
+                }
             });
+
+            // Yetkili kural: en az 1 yetkili her açık günde çalışmalı
+            if (authorizedEmployeeIds.length > 0) {
+                const authViolations = getAuthorizedViolation(state, authorizedEmployeeIds, openDays);
+                cost += authViolations * 9999999;
+            }
 
             openDays.forEach(day => {
                 const dayAssigns = state.filter(a => a.day === day && isDepotWorkType(a.type));
@@ -389,23 +559,37 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
                 const nightWorkers = dayAssigns.filter(a => a.type === 'GECE').length;
 
                 if (dayAssigns.length === 0) cost += 50000;
-                if (dayRestCount > depotRestBalanceLimits.maxRestPerDay) cost += (dayRestCount - depotRestBalanceLimits.maxRestPerDay) * 900000;
-                if (dayRestCount < depotRestBalanceLimits.minRestPerDay) cost += (depotRestBalanceLimits.minRestPerDay - dayRestCount) * 350000;
-                cost += Math.pow(dayRestCount - depotRestBalanceLimits.idealRestPerDay, 2) * 25000;
-                cost += Math.abs(dayWorkers - nightWorkers) * 500;
+
+                // Yumuşak kural: aynı güne izin yığılmasın
+                if (depotRules.avoidSameDayCrowding) {
+                    if (dayRestCount > depotRestBalanceLimits.maxRestPerDay) cost += (dayRestCount - depotRestBalanceLimits.maxRestPerDay) * 900000;
+                    if (dayRestCount < depotRestBalanceLimits.minRestPerDay) cost += (depotRestBalanceLimits.minRestPerDay - dayRestCount) * 350000;
+                    cost += Math.pow(dayRestCount - depotRestBalanceLimits.idealRestPerDay, 2) * 25000;
+                }
+
+                // Yumuşak kural: gündüz/gece dengesi
+                if (depotRules.balanceDayNight) {
+                    cost += Math.abs(dayWorkers - nightWorkers) * 500;
+                }
             });
+
+            // Yumuşak kural: hafta sonu dengesi
+            if (depotRules.balanceWeekends) {
+                const imbalance = getWeekendImbalance(state, employees, openDays);
+                cost += imbalance * 300;
+            }
+
             return cost;
         };
 
-        const hasConsecutiveRestViolation = (state: any[]) => depotRules.consecutiveRestDays && employees.some((emp: any) => {
-            const targetRestDays = getDepotTargetRestDays(openDays.length);
-            if (targetRestDays <= 1) return false;
-            const restDays = state
-                .filter((assignment: any) => assignment.employeeId === emp.id && !closedDaySet.has(assignment.day) && assignment.type === 'IZIN')
-                .map((assignment: any) => assignment.day);
+        const hasHardViolation = (state: any[]) => {
+            if (depotRules.maxConsecutiveWorkDays > 0 && employees.some((emp: any) => {
+                const prevStreak = getPreviousWorkStreak(emp, previousDepotWorkStreakByEmployeeId);
+                return getConsecutiveWorkViolation(state, emp.id, openDays, depotRules.maxConsecutiveWorkDays, prevStreak) > 0;
+            })) return true;
 
-            return restDays.length >= targetRestDays && !isConsecutiveRestBlock(restDays, openDays, targetRestDays);
-        });
+            return false;
+        };
 
         let bestState = JSON.parse(JSON.stringify(currentAssignments));
         let bestCost = calculateDepotCost(bestState);
@@ -431,7 +615,7 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
                 empAssigns[idx2].endTime = temp.endTime;
             }
 
-            if (hasConsecutiveRestViolation(neighbor)) {
+            if (hasHardViolation(neighbor)) {
                 temperature *= 0.999;
                 continue;
             }
@@ -455,6 +639,7 @@ self.addEventListener("message", (event: MessageEvent<any>) => {
         return;
     }
 
+    // MAGAZA modu — değişiklik yok
     employees.forEach((emp: any) => {
         let empAssignments = currentAssignments.filter((a: any) => a.employeeId === emp.id && !closedDaySet.has(a.day));
         const locked = empAssignments.filter((a: any) => a.isLocked);

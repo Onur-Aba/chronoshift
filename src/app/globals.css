@@ -84,3 +84,14 @@ body {
   0% { background-position: 200% center; }
   100% { background-position: -200% center; }
 }
+/* Depo tablolarında yatay taşma kontrolü: sadece bu sınıfta yatay scrollbar görünür. */
+.depot-table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.depot-table-scroll::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 28%, transparent);
+  border-radius: 999px;
+}
+.depot-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

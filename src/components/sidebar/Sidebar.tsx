@@ -26,12 +26,18 @@ const PresetCard = ({ presetKey, preset }: { presetKey: string, preset: ShiftPre
         <div 
             ref={setNodeRef} 
             style={customStyle}
-            className={`flex items-stretch border border-border/60 border-l-4 rounded-2xl shadow-sm mb-4 transition-all duration-200 group hover:shadow-lg hover:border-border hover:translate-y-[-1px] relative overflow-hidden bg-background/35 backdrop-blur-sm ${isDragging ? 'opacity-40 scale-95 shadow-2xl' : ''}`}
+            draggable
+            onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = 'copy';
+                event.dataTransfer.setData('application/x-chronoshift-preset', JSON.stringify(preset));
+                event.dataTransfer.setData('text/plain', preset.type);
+            }}
+            {...listeners}
+            {...attributes}
+            className={`flex items-stretch border border-border/60 border-l-4 rounded-2xl shadow-sm mb-4 transition-all duration-200 group hover:shadow-lg hover:border-border hover:translate-y-[-1px] relative overflow-hidden bg-background/35 backdrop-blur-sm cursor-grab active:cursor-grabbing touch-none ${isDragging ? 'opacity-40 scale-95 shadow-2xl' : ''}`}
         >
             <div 
-                {...listeners} 
-                {...attributes} 
-                className="w-11 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-55 hover:opacity-100 touch-none bg-black/5 dark:bg-white/5 transition-colors border-r border-border/30"
+                className="w-11 flex items-center justify-center opacity-55 group-hover:opacity-100 bg-black/5 dark:bg-white/5 transition-colors border-r border-border/30"
             >
                 <GripVertical size={18} />
             </div>
@@ -53,15 +59,15 @@ const PresetCard = ({ presetKey, preset }: { presetKey: string, preset: ShiftPre
                         <div className="flex flex-col gap-1.5">
                             <div className="flex items-center gap-2 bg-background/90 px-2 py-1 rounded-md border border-border/60 shadow-inner">
                                 <span className="text-[9px] font-black uppercase opacity-50 w-8 text-right">GİRİŞ</span>
-                                <input type="time" value={preset.startTime} onChange={e => updatePreset(presetKey, e.target.value, preset.endTime, preset.color)} className="bg-transparent outline-none text-xs font-bold font-mono cursor-pointer text-foreground" />
+                                <input onPointerDown={(event) => event.stopPropagation()} type="time" value={preset.startTime} onChange={e => updatePreset(presetKey, e.target.value, preset.endTime, preset.color)} className="bg-transparent outline-none text-xs font-bold font-mono cursor-pointer text-foreground" />
                             </div>
                             <div className="flex items-center gap-2 bg-background/90 px-2 py-1 rounded-md border border-border/60 shadow-inner">
                                 <span className="text-[9px] font-black uppercase opacity-50 w-8 text-right">ÇIKIŞ</span>
-                                <input type="time" value={preset.endTime} onChange={e => updatePreset(presetKey, preset.startTime, e.target.value, preset.color)} className="bg-transparent outline-none text-xs font-bold font-mono cursor-pointer text-foreground" />
+                                <input onPointerDown={(event) => event.stopPropagation()} type="time" value={preset.endTime} onChange={e => updatePreset(presetKey, preset.startTime, e.target.value, preset.color)} className="bg-transparent outline-none text-xs font-bold font-mono cursor-pointer text-foreground" />
                             </div>
                         </div>
                     )}
-                    <label className="cursor-pointer relative flex items-center justify-center group/color" title="Rengi değiştir">
+                    <label onPointerDown={(event) => event.stopPropagation()} className="cursor-pointer relative flex items-center justify-center group/color" title="Rengi değiştir">
                         <input 
                             type="color" 
                             value={preset.color} 

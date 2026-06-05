@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Employee, Assignment, ShiftPreset, AppState, OperationMode, DepotShiftType, MagazaRuleSettings, DepotRuleSettings } from '@/types';
+import { Employee, Assignment, ShiftPreset, AppState, OperationMode, DepotShiftType, MagazaRuleSettings, DepotRuleSettings, DepotWeekSelection } from '@/types';
+import { DEFAULT_DEPOT_RULE_SETTINGS } from '@/lib/depot/depotDefaults';
+import { getDepotPreviousWeekTransitionOffEmployeeIds } from '@/lib/depot/depotArchive';
+import { getCurrentDepotWeekSelection, normalizeDepotWeekSelection } from '@/lib/depot/depotWeek';
 
 export const MAGAZA_PRESETS: Record<string, ShiftPreset> = {
     SABAH: { type: 'SABAH', startTime: '08:45', endTime: '17:45', label: 'Sabah', color: '#0ea5e9' }, 
@@ -18,10 +21,6 @@ export const DEFAULT_MAGAZA_RULE_SETTINGS: MagazaRuleSettings = {
     minClosers: 3
 };
 
-export const DEFAULT_DEPOT_RULE_SETTINGS: DepotRuleSettings = {
-    consecutiveRestDays: false
-};
-
 export const DEPO_PRESETS: Record<string, ShiftPreset> = {
     GUNDUZ: { type: 'GUNDUZ', startTime: '12:30', endTime: '22:30', label: 'Gündüz', color: '#ef4444', breakMinutes: 60, targetHours: 50, plannedHours: 10 },
     GECE: { type: 'GECE', startTime: '00:30', endTime: '09:00', label: 'Gece', color: '#f8fafc', breakMinutes: 60, targetHours: 42.5, plannedHours: 8.5 },
@@ -34,6 +33,15 @@ const DEFAULT_PRESETS_BY_MODE: Record<OperationMode, Record<string, ShiftPreset>
     DEPO: DEPO_PRESETS
 };
 
+const normalizeDepotPresetPalette = (presets: Record<string, ShiftPreset> = DEPO_PRESETS) => ({
+    ...DEPO_PRESETS,
+    ...presets,
+    GUNDUZ: { ...DEPO_PRESETS.GUNDUZ, ...(presets.GUNDUZ || {}), color: DEPO_PRESETS.GUNDUZ.color },
+    GECE: { ...DEPO_PRESETS.GECE, ...(presets.GECE || {}), color: DEPO_PRESETS.GECE.color },
+    IZIN: { ...DEPO_PRESETS.IZIN, ...(presets.IZIN || {}), color: DEPO_PRESETS.IZIN.color },
+    ARACI: { ...DEPO_PRESETS.ARACI, ...(presets.ARACI || {}), color: DEPO_PRESETS.ARACI.color },
+});
+
 interface StoreState {
     employees: Employee[];
     assignments: Assignment[];
@@ -44,6 +52,7 @@ interface StoreState {
     magazaRuleSettings: MagazaRuleSettings;
     depotRuleSettings: DepotRuleSettings;
     closedDays: string[];
+    depotSelectedWeek: DepotWeekSelection;
     
     globalTargetHours: number;
     useGlobalTargetHours: boolean;
@@ -53,6 +62,7 @@ interface StoreState {
     updateDepotRuleSettings: (settings: Partial<DepotRuleSettings>) => void;
     resetDepotRuleSettings: () => void;
     toggleClosedDay: (day: string) => void;
+    setDepotSelectedWeek: (selection: DepotWeekSelection) => void;
     setOperationMode: (mode: OperationMode) => void;
     
     addEmployee: (name: string, targetHours?: number, depotShiftType?: DepotShiftType) => void;
@@ -60,6 +70,10 @@ interface StoreState {
     clearEmployees: () => void;
     updateEmployeeTargetHours: (id: string, hours: number) => void;
     updateEmployeeDepotShiftType: (id: string, depotShiftType: DepotShiftType) => void;
+    /** DEPO: Personelin yetkili durumunu aç/kapat */
+    toggleEmployeeAuthorized: (id: string) => void;
+    /** DEPO: Önceki ay çalışma serisini güncelle */
+    updateEmployeePreviousStreak: (id: string, streak: number) => void;
     
     updatePreset: (type: string, startTime: string, endTime: string, color: string) => void;
     resetPresets: () => void; 
@@ -72,6 +86,17 @@ interface StoreState {
 const getModeTarget = (mode: OperationMode) => mode === 'DEPO' ? 50 : 45;
 const getDepotTarget = (depotShiftType: DepotShiftType = 'GUNDUZ') => DEPO_PRESETS[depotShiftType]?.targetHours ?? 50;
 const getFallbackDepotShiftType = (index: number): DepotShiftType => index % 2 === 0 ? 'GUNDUZ' : 'GECE';
+
+
+const buildDepotTransitionRestAssignment = (employeeId: string): Assignment => ({
+    id: `${employeeId}-Pazartesi`,
+    employeeId,
+    day: 'Pazartesi',
+    type: 'IZIN',
+    startTime: '',
+    endTime: '',
+    isLocked: true,
+});
 
 const normalizeEmployees = (employees: Employee[] = [], mode: OperationMode = 'MAGAZA', useGlobalTargetHours = true): Employee[] => {
     const modeTarget = getModeTarget(mode);
@@ -104,6 +129,7 @@ export const useAppStore = create<StoreState>()(
             magazaRuleSettings: DEFAULT_MAGAZA_RULE_SETTINGS,
             depotRuleSettings: DEFAULT_DEPOT_RULE_SETTINGS,
             closedDays: [],
+            depotSelectedWeek: getCurrentDepotWeekSelection(),
             globalTargetHours: 45,
             useGlobalTargetHours: true,
 
@@ -116,6 +142,8 @@ export const useAppStore = create<StoreState>()(
                 depotRuleSettings: { ...state.depotRuleSettings, ...settings }
             })),
             resetDepotRuleSettings: () => set({ depotRuleSettings: DEFAULT_DEPOT_RULE_SETTINGS }),
+            setDepotSelectedWeek: (selection) => set({ depotSelectedWeek: normalizeDepotWeekSelection(selection) }),
+
             toggleClosedDay: (day) => set((state) => {
                 const willClose = !state.closedDays.includes(day);
                 const closedDays = willClose
@@ -155,24 +183,52 @@ export const useAppStore = create<StoreState>()(
                 return {
                     employees: [
                         ...state.employees,
-                        { id: crypto.randomUUID(), name, targetHours: hours, depotShiftType }
+                        { 
+                            id: crypto.randomUUID(), 
+                            name, 
+                            targetHours: hours, 
+                            depotShiftType,
+                            isAuthorized: false,
+                            previousMonthWorkStreak: 0,
+                        }
                     ]
                 };
             }),
             removeEmployee: (id) => set((state) => ({ employees: state.employees.filter(e => e.id !== id), assignments: state.assignments.filter(a => a.employeeId !== id) })),
             clearEmployees: () => set({ employees: [], assignments: [], currentState: 'BOS' }),
             updateEmployeeTargetHours: (id, hours) => set((state) => ({ employees: state.employees.map(e => e.id === id ? { ...e, targetHours: hours } : e) })),
-            updateEmployeeDepotShiftType: (id, depotShiftType) => set((state) => ({
-                employees: state.employees.map(employee => employee.id === id
+            updateEmployeeDepotShiftType: (id, depotShiftType) => set((state) => {
+                const previousEmployee = state.employees.find(employee => employee.id === id);
+                const nextEmployees = state.employees.map(employee => employee.id === id
                     ? {
                         ...employee,
                         depotShiftType,
                         targetHours: state.operationMode === 'DEPO' ? getDepotTarget(depotShiftType) : employee.targetHours
                     }
                     : employee
-                ),
-                assignments: [],
-                currentState: 'BOS'
+                );
+
+                let nextAssignments: Assignment[] = [];
+                if (
+                    state.operationMode === 'DEPO' &&
+                    previousEmployee?.depotShiftType !== depotShiftType &&
+                    !state.closedDays.includes('Pazartesi')
+                ) {
+                    const transitionOffEmployeeIds = getDepotPreviousWeekTransitionOffEmployeeIds(state.depotSelectedWeek, nextEmployees);
+                    nextAssignments = transitionOffEmployeeIds.map(buildDepotTransitionRestAssignment);
+                }
+
+                return {
+                    employees: nextEmployees,
+                    assignments: nextAssignments,
+                    currentState: nextAssignments.length > 0 ? 'ELLE_DIZILIYOR' : 'BOS'
+                };
+            }),
+            toggleEmployeeAuthorized: (id) => set((state) => ({
+                employees: state.employees.map(e => e.id === id ? { ...e, isAuthorized: !e.isAuthorized } : e)
+            })),
+            updateEmployeePreviousStreak: (id, streak) => set((state) => ({
+                employees: state.employees.map(e => e.id === id ? { ...e, previousMonthWorkStreak: Math.max(0, Math.min(6, streak)) } : e)
             })),
 
             updatePreset: (type, startTime, endTime, color) => set((state) => {
@@ -239,7 +295,7 @@ export const useAppStore = create<StoreState>()(
         { 
             name: 'chronoshift-v2-storage', 
             storage: createJSONStorage(() => localStorage), 
-            version: 13,
+            version: 18,
             migrate: (persistedState: any, version: number) => {
                 if (!persistedState || version < 7) return undefined as any;
 
@@ -248,11 +304,11 @@ export const useAppStore = create<StoreState>()(
                 const modePresets = version < 10
                     ? {
                         MAGAZA: { ...MAGAZA_PRESETS, ...(savedModePresets.MAGAZA || {}) },
-                        DEPO: DEPO_PRESETS
+                        DEPO: normalizeDepotPresetPalette(DEPO_PRESETS)
                     }
                     : {
-                        ...DEFAULT_PRESETS_BY_MODE,
-                        ...savedModePresets
+                        MAGAZA: { ...MAGAZA_PRESETS, ...(savedModePresets.MAGAZA || {}) },
+                        DEPO: normalizeDepotPresetPalette(savedModePresets.DEPO || DEPO_PRESETS)
                     };
 
                 const baseState = version < 8
@@ -266,29 +322,42 @@ export const useAppStore = create<StoreState>()(
                         ...persistedState,
                         operationMode,
                         modePresets,
-                        presets: version < 10 && operationMode === 'DEPO'
-                            ? DEPO_PRESETS
-                            : persistedState.presets || modePresets[operationMode]
+                        presets: operationMode === 'DEPO'
+                            ? normalizeDepotPresetPalette(version < 10 ? DEPO_PRESETS : (persistedState.presets || modePresets.DEPO))
+                            : persistedState.presets || modePresets.MAGAZA
                     };
 
-	                const savedRules = persistedState.magazaRuleSettings || {};
-	                const savedDepotRules = persistedState.depotRuleSettings || {};
+                const savedRules = persistedState.magazaRuleSettings || {};
+                const savedDepotRules = persistedState.depotRuleSettings || {};
 
-	                return {
+                // Migrate employees to add new fields
+                const migratedEmployees = (baseState.employees || []).map((emp: any) => ({
+                    ...emp,
+                    isAuthorized: emp.isAuthorized ?? false,
+                    previousMonthWorkStreak: emp.previousMonthWorkStreak ?? 0,
+                }));
+
+                return {
                     ...baseState,
+                    employees: normalizeEmployees(migratedEmployees, baseState.operationMode, baseState.useGlobalTargetHours ?? true),
                     magazaRuleSettings: {
-	                        weeklyIzinTarget: savedRules.weeklyIzinTarget ?? DEFAULT_MAGAZA_RULE_SETTINGS.weeklyIzinTarget,
-	                        weeklyFullTarget: savedRules.weeklyFullTarget ?? DEFAULT_MAGAZA_RULE_SETTINGS.weeklyFullTarget,
-	                        weeklySabahTarget: savedRules.weeklySabahTarget ?? DEFAULT_MAGAZA_RULE_SETTINGS.weeklySabahTarget,
-	                        maxSabahPerEmployee: savedRules.maxSabahPerEmployee ?? DEFAULT_MAGAZA_RULE_SETTINGS.maxSabahPerEmployee,
-	                        requiredOpeners: savedRules.requiredOpeners ?? DEFAULT_MAGAZA_RULE_SETTINGS.requiredOpeners,
-	                        minClosers: savedRules.minClosers ?? DEFAULT_MAGAZA_RULE_SETTINGS.minClosers
+                        weeklyIzinTarget: savedRules.weeklyIzinTarget ?? DEFAULT_MAGAZA_RULE_SETTINGS.weeklyIzinTarget,
+                        weeklyFullTarget: savedRules.weeklyFullTarget ?? DEFAULT_MAGAZA_RULE_SETTINGS.weeklyFullTarget,
+                        weeklySabahTarget: savedRules.weeklySabahTarget ?? DEFAULT_MAGAZA_RULE_SETTINGS.weeklySabahTarget,
+                        maxSabahPerEmployee: savedRules.maxSabahPerEmployee ?? DEFAULT_MAGAZA_RULE_SETTINGS.maxSabahPerEmployee,
+                        requiredOpeners: savedRules.requiredOpeners ?? DEFAULT_MAGAZA_RULE_SETTINGS.requiredOpeners,
+                        minClosers: savedRules.minClosers ?? DEFAULT_MAGAZA_RULE_SETTINGS.minClosers
                     },
                     depotRuleSettings: {
-                        consecutiveRestDays: savedDepotRules.consecutiveRestDays ?? DEFAULT_DEPOT_RULE_SETTINGS.consecutiveRestDays
+                        consecutiveRestDays: savedDepotRules.consecutiveRestDays ?? DEFAULT_DEPOT_RULE_SETTINGS.consecutiveRestDays,
+                        maxConsecutiveWorkDays: savedDepotRules.maxConsecutiveWorkDays ?? DEFAULT_DEPOT_RULE_SETTINGS.maxConsecutiveWorkDays,
+                        requireOffBeforeDayToNight: savedDepotRules.requireOffBeforeDayToNight ?? DEFAULT_DEPOT_RULE_SETTINGS.requireOffBeforeDayToNight,
+                        balanceWeekends: savedDepotRules.balanceWeekends ?? DEFAULT_DEPOT_RULE_SETTINGS.balanceWeekends,
+                        balanceDayNight: savedDepotRules.balanceDayNight ?? DEFAULT_DEPOT_RULE_SETTINGS.balanceDayNight,
+                        avoidSameDayCrowding: savedDepotRules.avoidSameDayCrowding ?? DEFAULT_DEPOT_RULE_SETTINGS.avoidSameDayCrowding,
                     },
-	                    closedDays: Array.isArray(persistedState.closedDays) ? persistedState.closedDays : [],
-                    employees: normalizeEmployees(baseState.employees || [], baseState.operationMode, baseState.useGlobalTargetHours ?? true)
+                    closedDays: Array.isArray(persistedState.closedDays) ? persistedState.closedDays : [],
+                    depotSelectedWeek: normalizeDepotWeekSelection(persistedState.depotSelectedWeek),
                 } as StoreState;
             }
         }

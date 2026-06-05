@@ -11,14 +11,49 @@ import { Footer } from "@/components/layout/Footer";
 import { useAppStore } from "@/store/useAppStore";
 import { ShiftPreset } from "@/types";
 import { TextRotate } from "@/components/ui/TextRotate";
+import { getDepotPreviousWeekRules, getFirstMissingDepotWeekBefore } from "@/lib/depot/depotArchive";
 import { ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { AuroraBackground } from "@/components/ui/aurora-background";
 
 const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
+
+const getDragEndPoint = (event: DragEndEvent) => {
+    const activator = event.activatorEvent;
+    const delta = event.delta;
+
+    if (activator && 'clientX' in activator && 'clientY' in activator) {
+        return {
+            x: (activator as MouseEvent).clientX + delta.x,
+            y: (activator as MouseEvent).clientY + delta.y,
+        };
+    }
+
+    if (activator && 'changedTouches' in activator) {
+        const touch = (activator as TouchEvent).changedTouches?.[0];
+        if (touch) {
+            return { x: touch.clientX + delta.x, y: touch.clientY + delta.y };
+        }
+    }
+
+    return null;
+};
+
+const getCellIdFromDropPoint = (event: DragEndEvent) => {
+    const point = getDragEndPoint(event);
+    if (!point) return null;
+
+    const target = document
+        .elementsFromPoint(point.x, point.y)
+        .map(element => element.closest<HTMLElement>('[data-assignment-cell-id]'))
+        .find(Boolean);
+
+    return target?.dataset.assignmentCellId || null;
+};
+
 export default function Home() {
-    const { currentState, updateAssignment, setAppState } = useAppStore();
+    const { currentState, updateAssignment, setAppState, operationMode } = useAppStore();
     
     const [pendingAction, setPendingAction] = useState<{ cellId: string, preset: ShiftPreset } | null>(null);
     const [isOptimizing, setIsOptimizing] = useState(false);
@@ -58,7 +93,8 @@ export default function Home() {
             operationMode,
             magazaRuleSettings,
             depotRuleSettings,
-            closedDays
+            closedDays,
+            depotSelectedWeek
         } = useAppStore.getState();
 
         if (employees.length === 0) {
@@ -66,10 +102,36 @@ export default function Home() {
             return;
         }
 
+        if (operationMode === 'DEPO') {
+            const missingWeek = getFirstMissingDepotWeekBefore(depotSelectedWeek);
+            if (missingWeek) {
+                setAlertMessage(`${depotSelectedWeek.label} otomatik dizilemez. Arada boşluk bırakmamak için önce ${missingWeek.label} kaydedilmeli.`);
+                return;
+            }
+        }
+
         const optimizationRunId = `${Date.now()}-${optimizationRunCounterRef.current++}`;
 
+        const depotPreviousWeekRules = operationMode === 'DEPO'
+            ? getDepotPreviousWeekRules(depotSelectedWeek, employees)
+            : { transitionOffEmployeeIds: [], previousWorkStreakByEmployeeId: {} };
+
         setIsOptimizing(true);
-        workerRef.current?.postMessage({ employees, assignments, presets, days: DAYS, globalTargetHours, useGlobalTargetHours, operationMode, magazaRuleSettings, depotRuleSettings, closedDays, optimizationRunId });
+        workerRef.current?.postMessage({
+            employees,
+            assignments,
+            presets,
+            days: DAYS,
+            globalTargetHours,
+            useGlobalTargetHours,
+            operationMode,
+            magazaRuleSettings,
+            depotRuleSettings,
+            closedDays,
+            depotTransitionOffEmployeeIds: depotPreviousWeekRules.transitionOffEmployeeIds,
+            depotPreviousWorkStreakByEmployeeId: depotPreviousWeekRules.previousWorkStreakByEmployeeId,
+            optimizationRunId
+        });
     };
 
     const handleDragStart = (event: DragStartEvent) => {
@@ -80,20 +142,23 @@ export default function Home() {
     const handleDragEnd = (event: DragEndEvent) => {
         setActivePreset(null);
         const { active, over } = event;
-        if (!over) return;
 
-        const cellId = over.id.toString();
         const preset = active.data.current?.preset as ShiftPreset;
         if (!preset) return;
+
+        const overIsCell = over?.data.current?.type === 'Cell';
+        const cellId = overIsCell ? over?.id.toString() : getCellIdFromDropPoint(event);
+        if (!cellId) return;
 
         const lastDash = cellId.lastIndexOf('-');
         const day = cellId.substring(lastDash + 1);
         if (useAppStore.getState().closedDays.includes(day)) return;
 
-        if (currentState === 'OTO_DIZILDI') {
+        if (currentState === 'OTO_DIZILDI' && operationMode !== 'DEPO') {
             setPendingAction({ cellId, preset });
             return;
         }
+
         updateAssignment(cellId, preset.type, preset.startTime, preset.endTime, true);
     };
 
@@ -122,7 +187,7 @@ export default function Home() {
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} collisionDetection={pointerWithin}>
             <div className="min-h-screen w-full flex flex-col bg-background font-sans transition-colors duration-500 selection:bg-primary/30">
                 
-                <div className="sticky top-0 z-50">
+                <div className={`${operationMode === 'DEPO' ? 'relative' : 'sticky top-0'} z-50`}>
                     <Header />
                 </div>
 
@@ -159,7 +224,7 @@ export default function Home() {
                     </motion.div>
                 </AuroraBackground>
 
-                <main id="workspace" className="min-h-[calc(100vh-64px)] lg:min-h-[calc(100vh+140px)] lg:h-[calc(100vh+140px)] w-full flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative z-10 border-t border-border/50 bg-background/50 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.05)] dark:shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.2)]">
+                <main id="workspace" className={`${operationMode === 'DEPO' ? 'min-h-[calc(100vh+120px)] lg:min-h-[calc(100vh+300px)] lg:h-[calc(100vh+300px)]' : 'min-h-[calc(100vh-64px)] lg:min-h-[calc(100vh+140px)] lg:h-[calc(100vh+140px)]'} w-full flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative z-10 border-t border-border/50 bg-background/50 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.05)] dark:shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.2)]`}>
                     <CalendarBoard onOptimize={runOptimization} isOptimizing={isOptimizing} />
                     <Sidebar />
                 </main>
@@ -215,7 +280,7 @@ export default function Home() {
                 ) : null}
             </DragOverlay>
 
-            <LockPopup isOpen={pendingAction !== null} onConfirm={handleConfirmLock} onDecline={handleDeclineLock} />
+            {operationMode !== 'DEPO' && <LockPopup isOpen={pendingAction !== null} onConfirm={handleConfirmLock} onDecline={handleDeclineLock} />}
             <AlertPopup message={alertMessage} onClose={() => setAlertMessage(null)} />
         </DndContext>
     );
